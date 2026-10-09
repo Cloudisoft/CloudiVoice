@@ -91,7 +91,7 @@ export function buildSystemPrompt(cfg: AgentConfig, ctx: CallContext): string {
 
   return `You are ${ctx.introName || cfg.persona_name}, a voice agent for ${cfg.company_name}, speaking with a person on a ${ctx.isDemo ? "website demo call" : "phone call"}.
 Role: ${USE_CASES[cfg.use_case]}. Personality: ${tone}. ${formality}
-Current date and time for the caller: ${formatNow(ctx)}. Use it to turn phrases like "tomorrow at 3" into exact times.
+Current date and time for the caller: ${formatNow(ctx)}. Use it silently to turn phrases like "tomorrow at 3" into exact times; never mention the current time or date unless the caller asks. "कल" usually means tomorrow; if the call is between midnight and 5 AM and it is genuinely unclear, confirm the date naturally.
 
 # Language
 - Primary language: ${primary?.name ?? cfg.primary_language}. Fallback: ${fallback?.name ?? cfg.fallback_language}.

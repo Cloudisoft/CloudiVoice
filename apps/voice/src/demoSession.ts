@@ -10,6 +10,7 @@ import { addEvent, addTranscriptLine, createCall, finalizeCall, transition } fro
 import { searchKnowledge } from "@cloudivoice/core/services/knowledge";
 import { Conversation } from "./conversation";
 import { BrowserSink } from "./sinks";
+import { StreamingSynthesizer, StreamingTranscriber } from "./realtime";
 import { log } from "./log";
 
 export interface DemoClaims {
@@ -51,6 +52,8 @@ export function handleDemo(ws: WebSocket, claims: DemoClaims) {
     silenceCheckinSec: 9,
     maxSilenceCheckins: 2,
     sink: new BrowserSink(ws),
+    transcriber: new StreamingTranscriber(16000),
+    synthesizer: new StreamingSynthesizer(16000),
     hooks: {
       onStatus: (status) => send({ type: "status", status }),
       onTranscript: (l) => {
@@ -152,6 +155,8 @@ export async function handleAgentTest(ws: WebSocket, claims: AgentTestClaims) {
     silenceCheckinSec: config.silence_checkin_sec,
     maxSilenceCheckins: config.max_silence_checkins,
     sink: new BrowserSink(ws),
+    transcriber: new StreamingTranscriber(16000),
+    synthesizer: new StreamingSynthesizer(16000),
     hooks: {
       onStatus: (status) => send({ type: "status", status }),
       onTranscript: (l) => {

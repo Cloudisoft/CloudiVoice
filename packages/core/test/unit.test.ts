@@ -100,12 +100,13 @@ describe("audio", () => {
     const vad = new TurnDetector({ sampleRate: 8000, endSilenceMs: 300, minSpeechMs: 200 });
     const tone = (ms: number, amp: number) => Int16Array.from({ length: (8000 * ms) / 1000 }, (_, i) => Math.round(Math.sin(i / 3) * amp));
     const events: string[] = [];
-    for (let i = 0; i < 25; i++) vad.push(tone(20, 50)).forEach((e) => events.push(e.type));
-    vad.push(tone(20, 8000)).forEach((e) => events.push(e.type)); // a single click
-    for (let i = 0; i < 20; i++) vad.push(tone(20, 50)).forEach((e) => events.push(e.type));
+    const track = (e: { type: string }) => e.type !== "begin" && e.type !== "audio" && events.push(e.type);
+    for (let i = 0; i < 25; i++) vad.push(tone(20, 50)).forEach(track);
+    vad.push(tone(20, 8000)).forEach(track); // a single click
+    for (let i = 0; i < 20; i++) vad.push(tone(20, 50)).forEach(track);
     expect(events).toEqual(["noise"]);
-    for (let i = 0; i < 25; i++) vad.push(tone(20, 8000)).forEach((e) => events.push(e.type));
-    for (let i = 0; i < 20; i++) vad.push(tone(20, 50)).forEach((e) => events.push(e.type));
+    for (let i = 0; i < 25; i++) vad.push(tone(20, 8000)).forEach(track);
+    for (let i = 0; i < 20; i++) vad.push(tone(20, 50)).forEach(track);
     expect(events).toEqual(["noise", "speech_start", "utterance"]);
   });
 });

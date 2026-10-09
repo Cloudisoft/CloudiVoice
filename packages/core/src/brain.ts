@@ -88,6 +88,20 @@ export type BrainEvent =
   | { type: "control"; action: "end_call" | "transfer" }
   | { type: "done" };
 
+/**
+ * Older models (Claude Haiku 4.5 and earlier) don't accept `effort` or the
+ * server-side fallback beta; newer models get both.
+ */
+function supportsModernParams(model: string) {
+  return !/^claude-(haiku-4|sonnet-4-[05]|opus-4-[015]|3)/.test(model);
+}
+
+function requestExtras(model: string, effort: "low" | "medium" | "high") {
+  return supportsModernParams(model)
+    ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default", output_config: { effort } }
+    : {};
+}
+
 let client: Anthropic | undefined;
 function anthropic() {
   if (!env.anthropicApiKey) throw new Error("Reasoning engine is not configured");
@@ -162,9 +176,7 @@ export class AgentBrain {
         {
           model: this.model,
           max_tokens: 1024, // spoken turns are deliberately short
-          betas: ["server-side-fallback-2026-07-01"],
-          fallbacks: "default",
-          output_config: { effort: env.llmEffort },
+          ...requestExtras(this.model, env.llmEffort),
           system: [{ type: "text", text: this.system, cache_control: { type: "ephemeral" } }],
           tools: toolDefs,
           messages: this.messages,
@@ -249,7 +261,7 @@ export async function summarizeCall(
     model: env.llmModel,
     max_tokens: 2000,
     output_config: {
-      effort: "low",
+      ...(supportsModernParams(env.llmModel) ? { effort: "low" } : {}),
       format: {
         type: "json_schema",
         schema: {

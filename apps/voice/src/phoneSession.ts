@@ -14,6 +14,7 @@ import { clampToWindow } from "@cloudivoice/core/schedule";
 import { telephony } from "@cloudivoice/core/telephony";
 import { Conversation, type EndKind } from "./conversation";
 import { TelephonySink } from "./sinks";
+import { StreamingSynthesizer, StreamingTranscriber } from "./realtime";
 import { log } from "./log";
 
 const VOICEMAIL_GREETING =
@@ -173,6 +174,8 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
       silenceCheckinSec: data.config.silence_checkin_sec,
       maxSilenceCheckins: data.config.max_silence_checkins,
       sink,
+      transcriber: new StreamingTranscriber(inputRate),
+      synthesizer: new StreamingSynthesizer(inputRate),
       hooks: {
         onTranscript: (l) => {
           void persist((tx) => addTranscriptLine(tx, setup.orgId, setup.callId, l.speaker, l.text, l.atMs, l.language));

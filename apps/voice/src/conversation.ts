@@ -10,6 +10,7 @@
 import { AgentBrain, type BrainEvent, type ToolHost } from "@cloudivoice/core/brain";
 import { transcribe, synthesizeStream } from "@cloudivoice/core/speech";
 import { resample, TurnDetector } from "@cloudivoice/core/audio";
+import type { Synthesizer, Transcriber } from "./realtime";
 
 export type ConversationStatus = "connecting" | "listening" | "processing" | "speaking" | "ended" | "error";
 
@@ -47,6 +48,9 @@ export interface ConversationOptions {
   maxSilenceCheckins: number;
   sink: AudioSink;
   hooks: ConversationHooks;
+  /** Streaming speech engine clients; REST is used when omitted. */
+  transcriber?: Transcriber;
+  synthesizer?: Synthesizer;
 }
 
 const FILLERS = /^(h+m+|hmm+|haan+|ha+n|ji|ok(ay)?|uh+ ?huh|yeah|yes|accha|achha|theek hai|हाँ|हां|जी|अच्छा|ओके|हम्म)[.!?। ]*$/i;
@@ -74,6 +78,12 @@ export class Conversation {
   private turnQueue: Promise<void> = Promise.resolve();
   private lastLanguage: string;
   private muted = false;
+  private turnStartedAt = 0;
+
+  /** Per-stage latency, logged when DEBUG_LATENCY=1. */
+  private mark(stage: string, ms: number) {
+    if (process.env.DEBUG_LATENCY === "1") console.log(`[latency] ${stage} ${ms}ms`);
+  }
 
   constructor(private readonly o: ConversationOptions) {
     this.brain = new AgentBrain(o.system, o.tools);
@@ -106,7 +116,13 @@ export class Conversation {
   pushAudio(pcm: Int16Array) {
     if (this.ended || this.muted) return;
     for (const ev of this.vad.push(pcm)) {
-      if (ev.type === "speech_start") {
+      if (ev.type === "begin") {
+        this.o.transcriber?.begin(ev.preroll);
+      } else if (ev.type === "audio") {
+        this.o.transcriber?.push(ev.pcm);
+      } else if (ev.type === "noise") {
+        this.o.transcriber?.cancel();
+      } else if (ev.type === "speech_start") {
         this.clearSilenceTimer();
         // Barge-in: caller started talking over the agent.
         if (this.agentSpeaking) this.interrupt();
@@ -130,12 +146,17 @@ export class Conversation {
     if (this.ended) return;
     this.setStatus("processing");
     const atMs = this.elapsedMs;
-    // Speech engine works best at 16 kHz; phone audio is upsampled.
-    const rate = this.o.inputSampleRate < 16000 ? 16000 : this.o.inputSampleRate;
-    const audio = rate === this.o.inputSampleRate ? pcm : resample(pcm, this.o.inputSampleRate, rate);
     let text = "";
+    const tStt = Date.now();
     try {
-      const t = await transcribe(audio, rate);
+      let t;
+      if (this.o.transcriber) {
+        t = await this.o.transcriber.end(pcm);
+      } else {
+        // Speech engine works best at 16 kHz; phone audio is upsampled.
+        const rate = this.o.inputSampleRate < 16000 ? 16000 : this.o.inputSampleRate;
+        t = await transcribe(rate === this.o.inputSampleRate ? pcm : resample(pcm, this.o.inputSampleRate, rate), rate);
+      }
       text = t.text;
       if (t.language) this.lastLanguage = t.language === "en-IN" || t.language === "hi-IN" ? t.language : this.lastLanguage;
     } catch (e) {
@@ -150,6 +171,8 @@ export class Conversation {
       return;
     }
     this.checkins = 0;
+    this.mark("stt", Date.now() - tStt);
+    this.turnStartedAt = Date.now();
     this.o.hooks.onTranscript?.({ speaker: "caller", text, atMs, language: this.lastLanguage, final: true });
     // Background noise and fillers must not trigger a new answer while the agent is mid-reply.
     if (FILLERS.test(text.trim()) && this.agentSpeaking) return;
@@ -190,6 +213,7 @@ export class Conversation {
     onControl?: (c: "end_call" | "transfer") => void,
   ) {
     const queue: string[] = [...fixed];
+    let spokenAny = false;
     let producerDone = !events;
     let wake: (() => void) | null = null;
     const notify = () => {
@@ -202,6 +226,10 @@ export class Conversation {
       for await (const ev of events) {
         if (signal?.aborted) break;
         if (ev.type === "sentence") {
+          if (this.turnStartedAt && !spokenAny) {
+            spokenAny = true;
+            this.mark("llm_first_sentence", Date.now() - this.turnStartedAt);
+          }
           queue.push(ev.text);
           notify();
         } else if (ev.type === "tool") {
@@ -215,6 +243,7 @@ export class Conversation {
     })();
 
     let spoken = "";
+    let firstAudioMarked = false;
     for (;;) {
       if (signal?.aborted || this.ended) break;
       const next = queue.shift();
@@ -228,14 +257,22 @@ export class Conversation {
       this.agentSpeaking = true;
       this.speakingText = spoken ? `${spoken} ${next}` : next;
       try {
-        for await (const chunk of synthesizeStream(next, {
-          language: this.lastLanguage,
-          voice: this.o.voice,
-          pace: this.o.pace,
-          sampleRate: this.o.sink.sampleRate as 8000 | 16000,
-          signal,
-        })) {
+        const audio = this.o.synthesizer
+          ? this.o.synthesizer.speak(next, { language: this.lastLanguage, voice: this.o.voice, pace: this.o.pace, signal })
+          : synthesizeStream(next, {
+              language: this.lastLanguage,
+              voice: this.o.voice,
+              pace: this.o.pace,
+              sampleRate: this.o.sink.sampleRate as 8000 | 16000,
+              signal,
+            });
+        for await (const chunk of audio) {
           if (signal?.aborted || this.ended) break;
+          if (!firstAudioMarked && this.turnStartedAt) {
+            firstAudioMarked = true;
+            this.mark("first_audio_after_transcript", Date.now() - this.turnStartedAt);
+            this.turnStartedAt = 0;
+          }
           this.o.sink.play(chunk);
         }
       } catch (e) {
@@ -318,6 +355,8 @@ export class Conversation {
     if (this.maxTimer) clearTimeout(this.maxTimer);
     this.turnAbort?.abort();
     this.status = "ended";
+    this.o.transcriber?.close();
+    this.o.synthesizer?.close();
     this.o.hooks.onStatus?.("ended");
     this.o.hooks.onEnd?.(kind);
   }

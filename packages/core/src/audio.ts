@@ -170,6 +170,8 @@ export interface VadOptions {
 }
 
 export type VadEvent =
+  | { type: "begin"; preroll: Int16Array[] }
+  | { type: "audio"; pcm: Int16Array }
   | { type: "speech_start" }
   | { type: "utterance"; pcm: Int16Array; durationMs: number }
   | { type: "noise" };
@@ -217,11 +219,13 @@ export class TurnDetector {
         this.speechMs = ms;
         this.silenceMs = 0;
         this.buffer = [...this.preroll];
+        events.push({ type: "begin", preroll: [...this.buffer] });
       }
       return events;
     }
 
     this.buffer.push(frame);
+    events.push({ type: "audio", pcm: frame });
     if (voiced) {
       const wasConfirmed = this.speechMs >= this.minSpeechMs;
       this.speechMs += ms;
