@@ -1,8 +1,8 @@
-import { env } from "../env";
-import { PrimaryCarrierAdapter } from "./adapters/plivo";
-import { type TelephonyAdapter, TelephonyError } from "./types";
+import { env } from "./env";
+import { PrimaryCarrierAdapter } from "./telephony/adapters/plivo";
+import { type TelephonyAdapter, TelephonyError } from "./telephony/types";
 
-export * from "./types";
+export * from "./telephony/types";
 
 let cached: TelephonyAdapter | null | undefined;
 

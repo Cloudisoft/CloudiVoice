@@ -55,6 +55,8 @@ export interface TelephonyAdapter {
   searchNumbers(query: { countryIso: string; pattern?: string; type?: string }): Promise<AvailableNumber[]>;
   buyNumber(e164: string): Promise<CarrierNumber>;
   startRecording(providerCallId: string, callbackUrl: string): Promise<void>;
+  /** Download a finished recording so it can be kept in our own private storage. */
+  downloadRecording(sourceUrl: string): Promise<Uint8Array>;
   /** Verify that a webhook genuinely came from the carrier. */
   verifyWebhook(req: { method: string; url: string; headers: Headers; params: Record<string, string> }): boolean;
   /** Map a carrier hangup payload to a neutral end reason. */

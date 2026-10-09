@@ -276,6 +276,16 @@ export class PrimaryCarrierAdapter implements TelephonyAdapter {
     });
   }
 
+  async downloadRecording(sourceUrl: string): Promise<Uint8Array> {
+    const u = new URL(sourceUrl);
+    if (u.protocol !== "https:" || !/(^|\.)plivo\.com$/.test(u.hostname)) {
+      throw new TelephonyError("The recording link was not recognised.", `refusing to fetch recording from ${u.hostname}`);
+    }
+    const res = await fetch(u, { headers: { Authorization: `Basic ${Buffer.from(`${this.authId}:${this.authToken}`).toString("base64")}` } });
+    if (!res.ok) throw new TelephonyError("The recording is not available yet.", `recording download ${res.status}`, res.status);
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
   verifyWebhook(req: { method: string; url: string; headers: Headers; params: Record<string, string> }) {
     const nonce = req.headers.get("x-plivo-signature-v3-nonce");
     const sig = req.headers.get("x-plivo-signature-v3");
