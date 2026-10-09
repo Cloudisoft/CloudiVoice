@@ -1,0 +1,21 @@
+{
+  "name": "cloudivoice",
+  "private": true,
+  "version": "0.1.0",
+  "description": "CloudiVoice by Cloudisoft — India-first AI voice agents.",
+  "workspaces": ["packages/*", "apps/*"],
+  "engines": { "node": ">=20.11" },
+  "scripts": {
+    "dev": "npm run dev -w @cloudivoice/web",
+    "dev:voice": "npm run dev -w @cloudivoice/voice",
+    "build": "npm run build -w @cloudivoice/web",
+    "start": "npm run start -w @cloudivoice/web",
+    "start:voice": "npm run start -w @cloudivoice/voice",
+    "migrate": "npm run migrate -w @cloudivoice/core",
+    "seed": "npm run seed -w @cloudivoice/core",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "check:brand": "node scripts/check-brand-leaks.mjs"
+  }
+}
