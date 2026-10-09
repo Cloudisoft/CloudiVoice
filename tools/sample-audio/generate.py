@@ -8,7 +8,7 @@ waveform follow the real audio.
 
 Usage:
   python generate.py --model kokoro-v1.0.onnx --voices voices-v1.0.bin \
-      --out ../../apps/web/public/samples --manifest ../../apps/web/src/content/samples.json
+      --out ../../apps/web/public/samples --manifest ../../apps/web/public/samples/manifest.json
 
 Replace these files with recordings from your production voice stack as soon
 as verified recordings are available; the manifest format stays the same.
