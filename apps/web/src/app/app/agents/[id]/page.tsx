@@ -5,6 +5,7 @@ import { getAgent, listVersions } from "@cloudivoice/core/services/agents";
 import { telephony } from "@cloudivoice/core/telephony";
 import { AgentEditor } from "@/components/dash/AgentEditor";
 import { AgentTest } from "@/components/dash/AgentTest";
+import { ConfirmButton } from "@/components/ui/ConfirmButton";
 import { fmtDate, PageHeader } from "@/components/ui/kit";
 import { agentOptions } from "@/lib/options";
 import { hasPermission, tenant } from "@/lib/session";
@@ -109,7 +110,7 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
               {canEdit && (
                 <form action={deleteAgentAction} style={{ marginTop: 8 }}>
                   <input type="hidden" name="id" value={agent.id} />
-                  <button className="btn btn-danger btn-sm">Delete agent</button>
+                  <ConfirmButton message="Delete this agent and all its versions? Call records are kept.">Delete agent</ConfirmButton>
                 </form>
               )}
             </div>
