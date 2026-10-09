@@ -6,7 +6,7 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), geolocation=(), microphone=(self)" },
 ];
 
-export default {
+const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: ["@cloudivoice/core"],
@@ -19,3 +19,4 @@ export default {
     ];
   },
 };
+export default nextConfig;
