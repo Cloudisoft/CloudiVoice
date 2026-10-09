@@ -194,6 +194,7 @@
   box-shadow: var(--focus);
 }
 .big-play-label {
+  white-space: nowrap;
   padding: 5px 12px;
   border: 1px solid var(--line-strong);
   background: rgba(5, 8, 20, 0.85);
@@ -444,6 +445,14 @@
 }
 
 @media (max-width: 640px) {
+  .console-head {
+    padding: 12px 14px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .console-kind {
+    font-size: 12px;
+  }
   .console-stage {
     height: 220px;
   }

@@ -446,7 +446,7 @@ export function DemoConsole({ initial, samples, scenarios, languages, liveEnable
             <li key={i} className={i === activeIndex ? "is-active" : ""}>
               <button onClick={() => { seek(s.startMs); void play(); }}>
                 <span className="mono t">{formatTime(s.startMs)}</span>
-                <span className={`who who-${s.speaker} mono`}>{s.speaker === "agent" ? s.name : s.name}</span>
+                <span className={`who who-${s.speaker} mono`}>{s.name}</span>
                 <span className="txt">{s.text}</span>
               </button>
             </li>

@@ -117,7 +117,7 @@ export function Waveform({ agent, caller, durationMs, progressMs, onSeek, label 
       g.fillRect(x, plotH, 1, major ? 7 : 4);
       if (major && s > 0 && x < size.w - 24) {
         g.fillStyle = "rgba(255,255,255,0.42)";
-        g.fillText(String(s * 1000).padStart(5, "0"), x - 14, plotH + 10);
+        g.fillText(String(s * 1000), x - 14, plotH + 10);
       }
     }
 
