@@ -51,8 +51,8 @@ export interface ConversationOptions {
 
 const FILLERS = /^(h+m+|hmm+|haan+|ha+n|ji|ok(ay)?|uh+ ?huh|yeah|yes|accha|achha|theek hai|हाँ|हां|जी|अच्छा|ओके|हम्म)[.!?। ]*$/i;
 const CHECKINS: Record<string, string[]> = {
-  "hi-IN": ["क्या आप अभी भी line पर हैं?", "लगता है आवाज़ नहीं आ रही। मैं थोड़ी देर बाद फिर कोशिश करूँगी। धन्यवाद!"],
-  "en-IN": ["Are you still there?", "It seems we got disconnected. I'll try again later. Thank you!"],
+  "hi-IN": ["क्या आप अभी भी line पर हैं?", "लगता है आवाज़ नहीं आ रही। हम थोड़ी देर बाद फिर कोशिश करेंगे। धन्यवाद!"],
+  "en-IN": ["Are you still there?", "It seems we got disconnected. We'll try again later. Thank you!"],
 };
 const MAX_DURATION_LINE: Record<string, string> = {
   "hi-IN": "हमारा समय लगभग पूरा हो गया है। आपके समय के लिए बहुत धन्यवाद, आपका दिन शुभ हो!",

@@ -9,9 +9,8 @@ import { createAgent, setAgentStatus } from "@cloudivoice/core/services/agents";
 import { setOnboardingStep, updateOrgSettings } from "@cloudivoice/core/services/org";
 import type { Tx } from "@cloudivoice/core/db/client";
 import { tenant } from "@/lib/session";
+import { STEPS, type Step } from "./steps";
 
-export const STEPS = ["business", "voice", "agent", "instructions", "knowledge", "telephony", "test", "checks"] as const;
-export type Step = (typeof STEPS)[number];
 
 async function firstAgent(tx: Tx) {
   const [a] = await tx<{ id: string; current_version: number }[]>`select id, current_version from agents order by created_at limit 1`;

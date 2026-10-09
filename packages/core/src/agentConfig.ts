@@ -40,28 +40,48 @@ export function parseAgentConfig(raw: unknown): AgentConfig {
   return agentConfigSchema.parse(raw ?? {});
 }
 
-export const DEFAULT_OPENINGS: Record<UseCase, { hi: string; en: string }> = {
+type Opening = { hi_f: string; hi_m: string; en: string };
+
+/** Default openings. Hindi verbs agree with the speaker's gender (बोल रही / बोल रहा). */
+export const DEFAULT_OPENINGS: Record<UseCase, Opening> = {
   receptionist: {
-    hi: "नमस्ते! मैं {{company}} से {{agent_name}} बोल रही हूँ। बताइए, मैं आपकी क्या मदद कर सकती हूँ?",
+    hi_f: "नमस्ते! मैं {{company}} से {{agent_name}} बोल रही हूँ। बताइए, मैं आपकी क्या मदद कर सकती हूँ?",
+    hi_m: "नमस्ते! मैं {{company}} से {{agent_name}} बोल रहा हूँ। बताइए, मैं आपकी क्या मदद कर सकता हूँ?",
     en: "Hello! This is {{agent_name}} from {{company}}. How can I help you today?",
   },
   sales: {
-    hi: "नमस्ते {{first_name}} जी, मैं {{company}} से {{agent_name}} बोल रही हूँ। क्या अभी दो मिनट बात करना ठीक रहेगा?",
+    hi_f: "नमस्ते {{first_name}} जी, मैं {{company}} से {{agent_name}} बोल रही हूँ। क्या अभी दो मिनट बात करना ठीक रहेगा?",
+    hi_m: "नमस्ते {{first_name}} जी, मैं {{company}} से {{agent_name}} बोल रहा हूँ। क्या अभी दो मिनट बात करना ठीक रहेगा?",
     en: "Hi {{first_name}}, this is {{agent_name}} calling from {{company}}. Is now a good time for a quick two-minute chat?",
   },
   support: {
-    hi: "नमस्ते! {{company}} support में आपका स्वागत है, मैं {{agent_name}} हूँ। बताइए क्या दिक्कत आ रही है?",
+    hi_f: "नमस्ते! {{company}} support में आपका स्वागत है, मैं {{agent_name}} हूँ। बताइए क्या दिक्कत आ रही है?",
+    hi_m: "नमस्ते! {{company}} support में आपका स्वागत है, मैं {{agent_name}} हूँ। बताइए क्या दिक्कत आ रही है?",
     en: "Hello, you've reached {{company}} support. I'm {{agent_name}}. What can I help you with?",
   },
   recruitment: {
-    hi: "नमस्ते {{first_name}} जी, मैं {{company}} की hiring team से {{agent_name}} बोल रही हूँ। आपने हमारे job के लिए apply किया था, क्या अभी बात हो सकती है?",
+    hi_f: "नमस्ते {{first_name}} जी, मैं {{company}} की hiring team से {{agent_name}} बोल रही हूँ। आपने हमारे job के लिए apply किया था, क्या अभी बात हो सकती है?",
+    hi_m: "नमस्ते {{first_name}} जी, मैं {{company}} की hiring team से {{agent_name}} बोल रहा हूँ। आपने हमारे job के लिए apply किया था, क्या अभी बात हो सकती है?",
     en: "Hi {{first_name}}, this is {{agent_name}} from the {{company}} hiring team. You applied for one of our roles — is this a good time to talk?",
   },
   followup: {
-    hi: "नमस्ते {{first_name}} जी, मैं {{company}} से {{agent_name}} बोल रही हूँ। आपने हमें callback के लिए कहा था, तो मैंने सोचा follow up कर लूँ।",
+    hi_f: "नमस्ते {{first_name}} जी, मैं {{company}} से {{agent_name}} बोल रही हूँ। आपने हमें callback के लिए कहा था, तो मैंने सोचा follow up कर लूँ।",
+    hi_m: "नमस्ते {{first_name}} जी, मैं {{company}} से {{agent_name}} बोल रहा हूँ। आपने हमें callback के लिए कहा था, तो मैंने सोचा follow up कर लूँ।",
     en: "Hi {{first_name}}, this is {{agent_name}} from {{company}}, calling back as you requested.",
   },
 };
+
+const MALE_VOICES = new Set(["aditya", "rahul", "dev", "amit", "shubh", "rohan", "varun", "anand", "vijay", "mani", "gokul", "kabir", "manan", "sumit", "ratan"]);
+
+export function voiceGender(voice: string): "female" | "male" {
+  return MALE_VOICES.has(voice) ? "male" : "female";
+}
+
+export function defaultOpening(useCase: UseCase, language: string, voice: string): string {
+  const o = DEFAULT_OPENINGS[useCase];
+  if (language !== "hi-IN") return o.en;
+  return voiceGender(voice) === "male" ? o.hi_m : o.hi_f;
+}
 
 /** Fill {{variables}} from lead/campaign data; unknown variables are removed cleanly. */
 export function fillTemplate(template: string, vars: Record<string, string | null | undefined>): string {

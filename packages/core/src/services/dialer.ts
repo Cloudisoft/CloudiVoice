@@ -46,9 +46,16 @@ export async function placeOutboundCall(
       select a.current_version, a.status, (v.config->>'max_duration_sec')::int as max
       from agents a join agent_versions v on v.agent_id = a.id and v.version = a.current_version where a.id = ${input.agentId}`;
     if (!agent) throw new DialError("Agent not found.");
-    const [org] = await tx<{ max_concurrency: number }[]>`select max_concurrency from organizations`;
+    const [org] = await tx<{ max_concurrency: number; monthly_spend_limit_paise: string | null }[]>`select max_concurrency, monthly_spend_limit_paise from organizations`;
     if ((await liveCallCount(tx)) >= Math.min(org!.max_concurrency, env.orgMaxConcurrency * 10)) {
       throw new DialError("You're at your concurrent call limit. Try again when a call finishes.");
+    }
+    if (org!.monthly_spend_limit_paise) {
+      const [{ spent }] = (await tx<{ spent: string }[]>`
+        select coalesce(sum(amount_paise), 0)::text as spent from usage_ledger where amount_paise > 0 and created_at > date_trunc('month', now())`) as unknown as [{ spent: string }];
+      if (Number(spent) >= Number(org!.monthly_spend_limit_paise)) {
+        throw new DialError("Your monthly spend limit has been reached. Raise it in Settings to keep calling.");
+      }
     }
     const id = await createCall(tx, {
       orgId,

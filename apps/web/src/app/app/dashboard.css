@@ -234,7 +234,7 @@
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
   gap: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);

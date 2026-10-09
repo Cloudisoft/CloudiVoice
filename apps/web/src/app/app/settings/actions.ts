@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { env } from "@cloudivoice/core/env";
-import { createInvitation, listSessions, ROLES, type Role, signOutEverywhere } from "@cloudivoice/core/services/auth";
+import { createInvitation, ROLES, type Role, signOutEverywhere } from "@cloudivoice/core/services/auth";
 import { audit } from "@cloudivoice/core/services/audit";
 import { changeRole, removeMember, setConnectionHealth, updateOrgSettings } from "@cloudivoice/core/services/org";
 import { replayWebhook } from "@cloudivoice/core/services/telephonyEvents";
@@ -128,8 +128,4 @@ export async function signOutEverywhereAction() {
   await signOutEverywhere(user.userId);
   await clearSessionCookie();
   redirect("/login");
-}
-
-export async function sessionsFor(userId: string) {
-  return listSessions(userId);
 }

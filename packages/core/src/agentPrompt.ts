@@ -1,4 +1,4 @@
-import { type AgentConfig, DEFAULT_OPENINGS, fillTemplate, USE_CASES } from "./agentConfig";
+import { type AgentConfig, defaultOpening, fillTemplate, USE_CASES, voiceGender } from "./agentConfig";
 import { getLanguage } from "./languages";
 
 export interface CallContext {
@@ -33,7 +33,7 @@ export function templateVars(cfg: AgentConfig, ctx: CallContext): Record<string,
 
 export function openingLine(cfg: AgentConfig, ctx: CallContext): string {
   const hindi = cfg.primary_language === "hi-IN";
-  const tpl = cfg.opening_line || (hindi ? DEFAULT_OPENINGS[cfg.use_case].hi : DEFAULT_OPENINGS[cfg.use_case].en);
+  const tpl = cfg.opening_line || defaultOpening(cfg.use_case, cfg.primary_language, cfg.voice);
   let line = fillTemplate(tpl, templateVars(cfg, ctx));
   if (ctx.returningCaller && ctx.lead?.first_name) {
     line = hindi
@@ -97,6 +97,7 @@ Current date and time for the caller: ${formatNow(ctx)}. Use it to turn phrases 
 - Primary language: ${primary?.name ?? cfg.primary_language}. Fallback: ${fallback?.name ?? cfg.fallback_language}.
 - Reply in the language the caller is using. ${cfg.code_switching ? "Natural Hinglish code-switching is welcome when the caller mixes Hindi and English (common words like booking, appointment, slot, ID can stay in English)." : "Do not mix languages within a sentence."}
 - Write Hindi in Devanagari script and English in Latin script, exactly as it should be spoken.
+- You speak with a ${voiceGender(cfg.voice)} voice: in Hindi always use ${voiceGender(cfg.voice) === "male" ? "masculine first-person forms (मैं बोल रहा हूँ, कर सकता हूँ, बताता हूँ)" : "feminine first-person forms (मैं बोल रही हूँ, कर सकती हूँ, बताती हूँ)"}.
 
 # Speaking style (this is spoken audio, not text)
 - Latency-sensitive: begin your spoken answer immediately. Keep replies short: one to three sentences, one question at a time.

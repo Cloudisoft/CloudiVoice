@@ -187,6 +187,10 @@ describe("agent prompt", () => {
     expect(prompt).toMatch(/Never end the call in the middle/);
     expect(prompt).toMatch(/money in words/i);
     expect(openingLine(cfg, { direction: "inbound", canTransfer: false })).toContain("City Care Clinic");
+    expect(prompt).toMatch(/feminine first-person/);
+    const male = parseAgentConfig({ company_name: "Skyline", persona_name: "Rohan", voice: "aditya", use_case: "sales" });
+    expect(openingLine(male, { direction: "outbound", canTransfer: false })).toContain("बोल रहा हूँ");
+    expect(buildSystemPrompt(male, { direction: "outbound", canTransfer: false })).toMatch(/masculine first-person/);
   });
 });
 
@@ -204,7 +208,8 @@ describe("crypto", () => {
   it("signs and expires payloads", () => {
     const t = signPayload({ a: 1 }, 60);
     expect(verifyPayload<{ a: number }>(t)?.a).toBe(1);
-    expect(verifyPayload(t.replace(/.$/, "x"))).toBeNull();
+    const tampered = t.slice(0, -1) + (t.endsWith("A") ? "B" : "A");
+    expect(verifyPayload(tampered)).toBeNull();
     expect(verifyPayload(signPayload({ a: 1 }, -1))).toBeNull();
   });
 });

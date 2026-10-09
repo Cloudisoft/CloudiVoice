@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useRef, useState } from "react";
-import { SubmitButton } from "@/components/ui/form";
+import { startTransition, useActionState, useState } from "react";
 import { previewImportAction, runImportAction, type ImportState, type PreviewState } from "../actions";
 
 const FIELDS: { value: string; label: string }[] = [
@@ -20,11 +19,12 @@ const FIELDS: { value: string; label: string }[] = [
 ];
 
 export function ImportWizard({ lists }: { lists: { id: string; name: string }[] }) {
-  const [preview, previewAction] = useActionState<PreviewState, FormData>(previewImportAction, {});
-  const [result, importAction] = useActionState<ImportState, FormData>(runImportAction, {});
+  const [preview, previewAction, previewing] = useActionState<PreviewState, FormData>(previewImportAction, {});
+  const [result, importAction, importing] = useActionState<ImportState, FormData>(runImportAction, {});
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [listMode, setListMode] = useState<"new" | "existing">(lists.length ? "existing" : "new");
-  const fileRef = useRef<HTMLInputElement>(null);
+  // The file lives in state: form actions reset their form, which would clear a file input.
+  const [file, setFile] = useState<File | null>(null);
   const effective = { ...preview.mapping, ...mapping };
   const hasPhone = Object.values(effective).includes("phone");
 
@@ -82,18 +82,28 @@ export function ImportWizard({ lists }: { lists: { id: string; name: string }[] 
         <div className="panel-head">
           <h2>1 · Choose a file</h2>
         </div>
-        <form action={previewAction} className="panel-body stack">
+        <form
+          className="panel-body stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!file) return;
+            const fd = new FormData();
+            fd.set("file", file);
+            setMapping({});
+            startTransition(() => previewAction(fd));
+          }}
+        >
           {preview.error && <div className="notice notice-bad">{preview.error}</div>}
           <label className="drop">
             <span>
               <b>CSV or Excel (.xlsx)</b> — first row must contain column names. Up to 50,000 rows.
             </span>
-            <input ref={fileRef} type="file" name="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required onChange={() => setMapping({})} />
+            <input type="file" name="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required onChange={(e) => { setFile(e.target.files?.[0] ?? null); setMapping({}); }} />
           </label>
           <div className="form-actions">
-            <SubmitButton className="btn btn-ghost btn-sm" pendingText="Reading…">
-              Read columns
-            </SubmitButton>
+            <button className="btn btn-ghost btn-sm" disabled={!file || previewing}>
+              {previewing ? "Reading…" : "Read columns"}
+            </button>
           </div>
         </form>
       </section>
@@ -101,11 +111,12 @@ export function ImportWizard({ lists }: { lists: { id: string; name: string }[] 
       {preview.headers && (
         <form
           className="panel"
-          action={(fd) => {
-            const f = fileRef.current?.files?.[0];
-            if (f) fd.set("file", f);
+          onSubmit={(e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            if (file) fd.set("file", file);
             fd.set("mapping", JSON.stringify(effective));
-            return importAction(fd);
+            startTransition(() => importAction(fd));
           }}
         >
           <div className="panel-head">
@@ -182,7 +193,9 @@ export function ImportWizard({ lists }: { lists: { id: string; name: string }[] 
               <span>Update details for numbers that already exist (otherwise existing leads are left unchanged).</span>
             </label>
             <div className="form-actions">
-              <SubmitButton pendingText="Importing…">Import {preview.total?.toLocaleString("en-IN")} rows</SubmitButton>
+              <button className="btn btn-accent" disabled={!hasPhone || importing}>
+                {importing ? "Importing…" : `Import ${preview.total?.toLocaleString("en-IN")} rows`}
+              </button>
             </div>
           </div>
         </form>

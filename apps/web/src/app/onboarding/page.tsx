@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { DEFAULT_OPENINGS, USE_CASES } from "@cloudivoice/core/agentConfig";
+import { defaultOpening, USE_CASES } from "@cloudivoice/core/agentConfig";
 import { getDemoScenario } from "@cloudivoice/core/demoScenarios";
 import { liveStackStatus } from "@cloudivoice/core/env";
 import { getAgent } from "@cloudivoice/core/services/agents";
@@ -10,7 +10,8 @@ import { AgentTest } from "@/components/dash/AgentTest";
 import { agentOptions } from "@/lib/options";
 import { requireOrgUser, tenant } from "@/lib/session";
 import { UploadForm } from "../app/knowledge/UploadForm";
-import { agentStep, advanceStep, businessStep, finishOnboarding, instructionsStep, STEPS, voiceStep, type Step } from "./actions";
+import { agentStep, advanceStep, businessStep, finishOnboarding, instructionsStep, voiceStep } from "./actions";
+import { STEPS, type Step } from "./steps";
 import "../app/dashboard.css";
 import "./onboarding.css";
 
@@ -63,7 +64,15 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
       <button className={cls}>{label}</button>
     </form>
   );
-  const back = idx > 0 ? nav(STEPS[idx - 1]!, "Back", "btn btn-quiet") : null;
+  const backQs = new URLSearchParams({ step: STEPS[Math.max(0, idx - 1)]! });
+  if (scenario) backQs.set("scenario", scenario.id);
+  if (lang) backQs.set("lang", lang);
+  const back =
+    idx > 0 ? (
+      <Link href={`/onboarding?${backQs}`} className="btn btn-quiet">
+        Back
+      </Link>
+    ) : null;
 
   return (
     <div className="onb">
@@ -86,7 +95,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
         <p className="onb-sub">{TITLES[step][1]}</p>
         {scenario && idx <= 2 && (
           <div className="notice" style={{ marginBottom: 18 }}>
-            Starting from the <b style={{ margin: "0 4px" }}>{scenario.label}</b> demo you tried{lang ? ` in ${lang === "hi-IN" ? "Hindi" : "English"}` : ""}.
+            Starting from the <b>&nbsp;{scenario.label}&nbsp;</b> demo you tried{lang ? ` in ${lang === "hi-IN" ? "Hindi" : "English"}` : ""}.
           </div>
         )}
 
@@ -201,7 +210,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
             </div>
             <div className="field span-2">
               <label htmlFor="g-open">Opening line</label>
-              <textarea id="g-open" name="opening_line" className="textarea" style={{ minHeight: 80 }} defaultValue={cfg.opening_line || (cfg.primary_language === "hi-IN" ? DEFAULT_OPENINGS[cfg.use_case].hi : DEFAULT_OPENINGS[cfg.use_case].en)} />
+              <textarea id="g-open" name="opening_line" className="textarea" style={{ minHeight: 80 }} defaultValue={cfg.opening_line || defaultOpening(cfg.use_case, cfg.primary_language, cfg.voice)} />
               <span className="field-hint">
                 Use <code className="mono">{"{{first_name}}"}</code>, <code className="mono">{"{{agent_name}}"}</code> and <code className="mono">{"{{company}}"}</code>.
               </span>
