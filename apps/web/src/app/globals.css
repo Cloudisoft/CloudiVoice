@@ -171,6 +171,32 @@ textarea {
   color: transparent;
 }
 
+/* ---------------------------------------------------------------- logo */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+.logo-mark {
+  width: 34px;
+  height: auto;
+}
+.logo-text {
+  display: grid;
+  line-height: 1.05;
+}
+.logo-name {
+  font-weight: 650;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+.logo-by {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 /* ---------------------------------------------------------------- buttons */
 .btn {
   --h: 44px;
