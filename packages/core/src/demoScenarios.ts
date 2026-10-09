@@ -36,7 +36,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
         voice: "priya",
         tone: "warm",
         instructions:
-          "Clinic hours: Monday to Saturday, 9 AM to 8 PM. Doctors: Dr. Mehta (general physician, consultation fee five hundred rupees), Dr. Iyer (dermatologist, eight hundred rupees). Offer the next available slots: tomorrow 11:30 AM or 5 PM. Ask for the patient's name and confirm the mobile number on file before booking.",
+          "Clinic hours: Monday to Saturday, 9 AM to 8 PM. Doctors: Dr. Mehta (general physician, consultation fee five hundred rupees), Dr. Rao (dermatologist, eight hundred rupees). Offer the next available slots: tomorrow 11:30 AM or 5 PM. Ask for the patient's name and confirm the mobile number on file before booking.",
         goals: ["Understand what the caller needs", "Book or reschedule an appointment", "Confirm date, time and doctor"],
       }),
   },

@@ -1,0 +1,149 @@
+{
+  "_note": "Sample conversations for the website hero. 'text' is what the transcript shows; optional 'say' is the pronunciation fed to the synthesizer. Synthetic businesses and people only.",
+  "samples": [
+    {
+      "id": "receptionist-hi",
+      "scenario": "receptionist",
+      "language": "hi-IN",
+      "business": "Sunrise Multispeciality Clinic",
+      "agent": { "name": "Ananya", "voice": "hf_alpha", "lang": "hi", "speed": 1.0 },
+      "caller": { "name": "Rahul", "voice": "hm_omega", "lang": "hi", "speed": 1.05 },
+      "turns": [
+        { "s": "agent", "text": "नमस्ते! Sunrise Clinic से अनन्या बोल रही हूँ। बताइए, मैं आपकी क्या मदद कर सकती हूँ?", "say": "नमस्ते! सनराइज़ क्लिनिक से अनन्या बोल रही हूँ। बताइए, मैं आपकी क्या मदद कर सकती हूँ?" },
+        { "s": "caller", "text": "हाँ जी, मुझे कल Dr. Mehta का appointment चाहिए था।", "say": "हाँ जी, मुझे कल डॉक्टर मेहता का अपॉइंटमेंट चाहिए था।" },
+        { "s": "agent", "text": "ज़रूर। कल Dr. Mehta के पास सुबह साढ़े ग्यारह बजे और शाम पाँच बजे के slots खाली हैं। आपके लिए कौन सा ठीक रहेगा?", "say": "ज़रूर। कल डॉक्टर मेहता के पास सुबह साढ़े ग्यारह बजे और शाम पाँच बजे के स्लॉट खाली हैं। आपके लिए कौन सा ठीक रहेगा?" },
+        { "s": "caller", "text": "शाम पाँच बजे वाला कर दीजिए।" },
+        { "s": "agent", "text": "ठीक है। Patient का नाम बता दीजिए?", "say": "ठीक है। पेशेंट का नाम बता दीजिए?" },
+        { "s": "caller", "text": "राहुल शर्मा।" },
+        { "s": "agent", "text": "धन्यवाद राहुल जी। मैं आपका नंबर नौ आठ सात छह पाँच, चार तीन दो एक शून्य confirm कर लूँ, सही है?", "say": "धन्यवाद राहुल जी। मैं आपका नंबर नौ आठ सात छह पाँच, चार तीन दो एक शून्य कन्फ़र्म कर लूँ, सही है?" },
+        { "s": "caller", "text": "हाँ, बिल्कुल सही है।" },
+        { "s": "tool", "text": "book_appointment ▸ Dr. Mehta · tomorrow 5:00 PM" },
+        { "s": "agent", "text": "हो गया! कल शाम पाँच बजे Dr. Mehta के साथ आपका appointment confirm है। Consultation fee पाँच सौ रुपये है। और कुछ मदद कर सकती हूँ?", "say": "हो गया! कल शाम पाँच बजे डॉक्टर मेहता के साथ आपका अपॉइंटमेंट कन्फ़र्म है। कंसल्टेशन फ़ीस पाँच सौ रुपये है। और कुछ मदद कर सकती हूँ?" },
+        { "s": "caller", "text": "नहीं, बस इतना ही। Thank you!", "say": "नहीं, बस इतना ही। थैंक यू!" },
+        { "s": "agent", "text": "आपका दिन शुभ हो, राहुल जी। नमस्ते!" }
+      ]
+    },
+    {
+      "id": "receptionist-en",
+      "scenario": "receptionist",
+      "language": "en-IN",
+      "business": "Sunrise Multispeciality Clinic",
+      "agent": { "name": "Ananya", "voice": "hf_alpha", "lang": "en-gb", "speed": 1.0 },
+      "caller": { "name": "Priya", "voice": "hf_beta", "lang": "en-gb", "speed": 1.05 },
+      "turns": [
+        { "s": "agent", "text": "Hello! This is Ananya from Sunrise Clinic. How can I help you today?" },
+        { "s": "caller", "text": "Hi, I'd like to see a dermatologist this week, if possible." },
+        { "s": "agent", "text": "Of course. Dr. Rao, our dermatologist, has openings tomorrow at eleven thirty in the morning, or at five in the evening. Which one works for you?", "say": "Of course. Doctor Rao, our dermatologist, has openings tomorrow at eleven thirty in the morning, or at five in the evening. Which one works for you?" },
+        { "s": "caller", "text": "Eleven thirty is perfect." },
+        { "s": "agent", "text": "Lovely. May I have the patient's name, please?" },
+        { "s": "caller", "text": "Priya Menon." },
+        { "s": "tool", "text": "book_appointment ▸ Dr. Rao · tomorrow 11:30 AM" },
+        { "s": "agent", "text": "Thank you, Priya. You're booked with Dr. Rao tomorrow at eleven thirty. The consultation fee is eight hundred rupees. Is there anything else I can help with?", "say": "Thank you, Priya. You're booked with Doctor Rao tomorrow at eleven thirty. The consultation fee is eight hundred rupees. Is there anything else I can help with?" },
+        { "s": "caller", "text": "No, that's all. Thanks!" },
+        { "s": "agent", "text": "You're welcome. See you tomorrow, and have a lovely day!" }
+      ]
+    },
+    {
+      "id": "sales-hi",
+      "scenario": "sales",
+      "language": "hi-IN",
+      "business": "Skyline Homes",
+      "agent": { "name": "Rohan", "voice": "hm_omega", "lang": "hi", "speed": 1.05 },
+      "caller": { "name": "Neha", "voice": "hf_beta", "lang": "hi", "speed": 1.05 },
+      "turns": [
+        { "s": "agent", "text": "नमस्ते नेहा जी, मैं Skyline Homes से रोहन बोल रहा हूँ। आपने Baner वाले project के बारे में पूछा था। क्या अभी दो मिनट बात हो सकती है?", "say": "नमस्ते नेहा जी, मैं स्काईलाइन होम्स से रोहन बोल रहा हूँ। आपने बानेर वाले प्रोजेक्ट के बारे में पूछा था। क्या अभी दो मिनट बात हो सकती है?" },
+        { "s": "caller", "text": "हाँ, बोलिए।" },
+        { "s": "agent", "text": "धन्यवाद! आप two BHK देख रही हैं या three BHK?", "say": "धन्यवाद! आप टू बी एच के देख रही हैं या थ्री बी एच के?" },
+        { "s": "caller", "text": "Three BHK, और budget लगभग एक करोड़ तक है।", "say": "थ्री बी एच के, और बजट लगभग एक करोड़ तक है।" },
+        { "s": "agent", "text": "बहुत बढ़िया। हमारे three BHK एक करोड़ पाँच लाख से शुरू होते हैं, और possession दिसंबर दो हज़ार सत्ताईस में है। आप कब तक घर लेने का सोच रही हैं?", "say": "बहुत बढ़िया। हमारे थ्री बी एच के एक करोड़ पाँच लाख से शुरू होते हैं, और पज़ेशन दिसंबर दो हज़ार सत्ताईस में है। आप कब तक घर लेने का सोच रही हैं?" },
+        { "s": "caller", "text": "अगले छह महीने में decide करना है।", "say": "अगले छह महीने में डिसाइड करना है।" },
+        { "s": "tool", "text": "mark_qualified ▸ 3 BHK · ₹1 Cr budget · 6 months" },
+        { "s": "agent", "text": "Perfect। तो क्यों न इस शनिवार site visit कर लें? सुबह ग्यारह बजे कैसा रहेगा?", "say": "परफ़ेक्ट। तो क्यों न इस शनिवार साइट विज़िट कर लें? सुबह ग्यारह बजे कैसा रहेगा?" },
+        { "s": "caller", "text": "ठीक है, शनिवार ग्यारह बजे।" },
+        { "s": "tool", "text": "book_appointment ▸ Site visit · Saturday 11:00 AM" },
+        { "s": "agent", "text": "Done! शनिवार सुबह ग्यारह बजे आपकी site visit book हो गई है। Location मैं आपको message कर दूँगा। धन्यवाद नेहा जी!", "say": "डन! शनिवार सुबह ग्यारह बजे आपकी साइट विज़िट बुक हो गई है। लोकेशन मैं आपको मैसेज कर दूँगा। धन्यवाद नेहा जी!" }
+      ]
+    },
+    {
+      "id": "sales-en",
+      "scenario": "sales",
+      "language": "en-IN",
+      "business": "Skyline Homes",
+      "agent": { "name": "Rohan", "voice": "hm_omega", "lang": "en-gb", "speed": 1.05 },
+      "caller": { "name": "Arjun", "voice": "hm_psi", "lang": "en-gb", "speed": 1.05 },
+      "turns": [
+        { "s": "agent", "text": "Hi Arjun, this is Rohan from Skyline Homes. You enquired about our Baner project. Is this a good time for a quick chat?" },
+        { "s": "caller", "text": "Sure, go ahead." },
+        { "s": "agent", "text": "Great. Are you looking at a two BHK or a three BHK?", "say": "Great. Are you looking at a two B H K or a three B H K?" },
+        { "s": "caller", "text": "Two BHK. My budget is around ninety lakhs.", "say": "Two B H K. My budget is around ninety lakhs." },
+        { "s": "agent", "text": "That works well. Our two BHK homes start at eighty-five lakh rupees, with possession in December twenty twenty-seven. When are you hoping to buy?", "say": "That works well. Our two B H K homes start at eighty-five lakh rupees, with possession in December twenty twenty-seven. When are you hoping to buy?" },
+        { "s": "caller", "text": "Probably in the next three months. I'll need a home loan." },
+        { "s": "tool", "text": "mark_qualified ▸ 2 BHK · ₹90 L budget · 3 months · loan" },
+        { "s": "agent", "text": "No problem, we work with several banks and can help with the loan. Shall I book a site visit this Sunday at eleven?" },
+        { "s": "caller", "text": "Sunday at eleven works." },
+        { "s": "tool", "text": "book_appointment ▸ Site visit · Sunday 11:00 AM" },
+        { "s": "agent", "text": "Done. You're booked for Sunday at eleven. I'll send the location shortly. Thanks, Arjun!" }
+      ]
+    },
+    {
+      "id": "support-hi",
+      "scenario": "support",
+      "language": "hi-IN",
+      "business": "QuickCart",
+      "agent": { "name": "Kavya", "voice": "hf_alpha", "lang": "hi", "speed": 1.0 },
+      "caller": { "name": "Amit", "voice": "hm_psi", "lang": "hi", "speed": 1.05 },
+      "turns": [
+        { "s": "agent", "text": "नमस्ते! QuickCart support में आपका स्वागत है, मैं काव्या बोल रही हूँ। बताइए क्या दिक्कत आ रही है?", "say": "नमस्ते! क्विककार्ट सपोर्ट में आपका स्वागत है, मैं काव्या बोल रही हूँ। बताइए क्या दिक्कत आ रही है?" },
+        { "s": "caller", "text": "मेरा order अभी तक नहीं आया। Order ID है QC चार पाँच सात आठ।", "say": "मेरा ऑर्डर अभी तक नहीं आया। ऑर्डर आई डी है क्यू सी चार पाँच सात आठ।" },
+        { "s": "agent", "text": "एक पल, मैं check करती हूँ।", "say": "एक पल, मैं चेक करती हूँ।" },
+        { "s": "tool", "text": "lookup_order ▸ QC4578 · out for delivery" },
+        { "s": "agent", "text": "अच्छी खबर है, आपका order out for delivery है और आज शाम सात बजे तक पहुँच जाएगा।", "say": "अच्छी खबर है, आपका ऑर्डर आउट फ़ॉर डिलीवरी है और आज शाम सात बजे तक पहुँच जाएगा।" },
+        { "s": "caller", "text": "अच्छा। और अगर size सही नहीं हुआ तो return कर सकते हैं?", "say": "अच्छा। और अगर साइज़ सही नहीं हुआ तो रिटर्न कर सकते हैं?" },
+        { "s": "agent", "text": "जी हाँ, delivery के सात दिन के अंदर आप return कर सकते हैं, और refund पाँच से सात working days में आपके original payment method में आ जाएगा।", "say": "जी हाँ, डिलीवरी के सात दिन के अंदर आप रिटर्न कर सकते हैं, और रिफ़ंड पाँच से सात वर्किंग डेज़ में आपके ओरिजिनल पेमेंट मेथड में आ जाएगा।" },
+        { "s": "caller", "text": "ठीक है, thank you।", "say": "ठीक है, थैंक यू।" },
+        { "s": "agent", "text": "आपका स्वागत है! और कुछ हो तो बताइएगा। आपका दिन अच्छा रहे।" }
+      ]
+    },
+    {
+      "id": "recruitment-en",
+      "scenario": "recruitment",
+      "language": "en-IN",
+      "business": "TalentBridge Staffing",
+      "agent": { "name": "Simran", "voice": "hf_beta", "lang": "en-gb", "speed": 1.0 },
+      "caller": { "name": "Vikram", "voice": "hm_omega", "lang": "en-gb", "speed": 1.05 },
+      "turns": [
+        { "s": "agent", "text": "Hi Vikram, this is Simran from the TalentBridge hiring team. You applied for the Customer Support Executive role in Bengaluru. Is this a good time to talk?" },
+        { "s": "caller", "text": "Yes, absolutely." },
+        { "s": "agent", "text": "Great. How many years of customer-facing experience do you have?" },
+        { "s": "caller", "text": "About two years, at a telecom call centre." },
+        { "s": "agent", "text": "That's helpful. And what's your current notice period?" },
+        { "s": "caller", "text": "Thirty days." },
+        { "s": "agent", "text": "Perfect. Are you comfortable speaking with customers in both Hindi and English?" },
+        { "s": "caller", "text": "Yes, I use both every day." },
+        { "s": "tool", "text": "mark_qualified ▸ 2 yrs · 30-day notice · Hindi + English" },
+        { "s": "agent", "text": "Wonderful. I'd like to schedule your interview. Would Thursday at eleven in the morning or three in the afternoon suit you better?" },
+        { "s": "caller", "text": "Three in the afternoon, please." },
+        { "s": "tool", "text": "book_appointment ▸ Interview · Thursday 3:00 PM" },
+        { "s": "agent", "text": "You're all set for Thursday at three. You'll get the details by email. All the best, Vikram!" }
+      ]
+    },
+    {
+      "id": "followup-hi",
+      "scenario": "followup",
+      "language": "hi-IN",
+      "business": "Brightpath Academy",
+      "agent": { "name": "Dev", "voice": "hm_psi", "lang": "hi", "speed": 1.05 },
+      "caller": { "name": "Sunita", "voice": "hf_beta", "lang": "hi", "speed": 1.0 },
+      "turns": [
+        { "s": "agent", "text": "नमस्ते सुनीता जी, मैं Brightpath Academy से देव बोल रहा हूँ। आपने JEE weekend batch के बारे में पूछा था, तो follow up के लिए call किया।", "say": "नमस्ते सुनीता जी, मैं ब्राइटपाथ एकेडमी से देव बोल रहा हूँ। आपने जे ई ई वीकेंड बैच के बारे में पूछा था, तो फ़ॉलो अप के लिए कॉल किया।" },
+        { "s": "caller", "text": "हाँ, पर अभी मैं थोड़ी busy हूँ।", "say": "हाँ, पर अभी मैं थोड़ी बिज़ी हूँ।" },
+        { "s": "agent", "text": "कोई बात नहीं। मैं आपको कब call करूँ? आज शाम या कल?", "say": "कोई बात नहीं। मैं आपको कब कॉल करूँ? आज शाम या कल?" },
+        { "s": "caller", "text": "कल शाम छह बजे ठीक रहेगा।" },
+        { "s": "tool", "text": "schedule_callback ▸ tomorrow 6:00 PM" },
+        { "s": "agent", "text": "ठीक है, कल शाम छह बजे मैं आपको call करूँगा। तब तक बता दूँ, fees पैंतालीस हज़ार रुपये सालाना है, तीन installments में।", "say": "ठीक है, कल शाम छह बजे मैं आपको कॉल करूँगा। तब तक बता दूँ, फ़ीस पैंतालीस हज़ार रुपये सालाना है, तीन इंस्टॉलमेंट्स में।" },
+        { "s": "caller", "text": "अच्छा, ठीक है। धन्यवाद।" },
+        { "s": "agent", "text": "धन्यवाद सुनीता जी, कल बात करते हैं!" }
+      ]
+    }
+  ]
+}
