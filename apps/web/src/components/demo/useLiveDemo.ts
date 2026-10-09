@@ -98,7 +98,7 @@ export function useLiveDemo() {
   };
 
   const start = useCallback(
-    async (scenario: string, language: string) => {
+    async (body: Record<string, string>, endpoint = "/api/demo/session") => {
       teardown();
       setLines([]);
       setError(null);
@@ -108,13 +108,13 @@ export function useLiveDemo() {
 
       let session: SessionResponse;
       try {
-        const res = await fetch("/api/demo/session", {
+        const res = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scenario, language }),
+          body: JSON.stringify(body),
         });
         session = (await res.json()) as SessionResponse;
-        if (!res.ok || !session.token || !session.url) throw new Error(session.error ?? "The live demo is unavailable right now.");
+        if (!res.ok || !session.token || !session.url) throw new Error(session.error ?? "The live session is unavailable right now.");
       } catch (e) {
         setError(e instanceof Error ? e.message : "The live demo is unavailable right now.");
         setStatus("error");

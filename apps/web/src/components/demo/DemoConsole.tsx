@@ -172,7 +172,7 @@ export function DemoConsole({ initial, samples, scenarios, languages, liveEnable
   const startLive = async () => {
     audio.current?.pause();
     setMode("live");
-    await live.start(scenario, language);
+    await live.start({ scenario, language });
   };
 
   const signupHref = `/signup?scenario=${encodeURIComponent(scenario)}&lang=${encodeURIComponent(language)}`;

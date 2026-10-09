@@ -17,7 +17,7 @@ import { dialerTick } from "@cloudivoice/core/services/dialer";
 import { markWebhook, storeWebhook, acquireLease } from "@cloudivoice/core/services/system";
 import { processTelephonyEvent, reconcileCalls, type TelephonyEventKind } from "@cloudivoice/core/services/telephonyEvents";
 import { handlePhoneStream } from "./phoneSession";
-import { handleDemo, type DemoClaims } from "./demoSession";
+import { handleAgentTest, handleDemo, type AgentTestClaims, type DemoClaims } from "./demoSession";
 import { backfillRecordings, enforceRetention } from "./jobs";
 import { log } from "./log";
 
@@ -200,9 +200,11 @@ server.on("upgrade", (req, socket, head) => {
   if (url.pathname === "/demo") {
     const origin = req.headers.origin ?? "";
     if (env.isProduction && origin && !origin.startsWith(env.appUrl)) return socket.destroy();
-    const claims = verifyPayload<DemoClaims & Record<string, unknown>>(token);
-    if (!claims || claims.kind !== "demo") return socket.destroy();
-    wss.handleUpgrade(req, socket, head, (ws) => handleDemo(ws, claims));
+    const claims = verifyPayload<(DemoClaims | AgentTestClaims) & Record<string, unknown>>(token);
+    if (!claims) return socket.destroy();
+    if (claims.kind === "demo") wss.handleUpgrade(req, socket, head, (ws) => handleDemo(ws, claims as DemoClaims));
+    else if (claims.kind === "agent") wss.handleUpgrade(req, socket, head, (ws) => void handleAgentTest(ws, claims as AgentTestClaims));
+    else socket.destroy();
     return;
   }
   socket.destroy();
