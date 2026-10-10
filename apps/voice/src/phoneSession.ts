@@ -15,6 +15,7 @@ import { telephony } from "@cloudivoice/core/telephony";
 import { Conversation, type EndKind } from "./conversation";
 import { TelephonySink } from "./sinks";
 import { StreamingSynthesizer, StreamingTranscriber } from "./realtime";
+import { LiveCall } from "./liveCalls";
 import { log } from "./log";
 import { summarizeAndStore } from "./postCall";
 
@@ -40,6 +41,7 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
   let transferNumber = "";
   let callerId = "";
   let transferring = false;
+  let live: LiveCall | null = null;
   let atOffsetMs = 0; // keeps transcript times continuous when the agent rejoins after a transfer
   const format = env.telephonyStreamFormat;
   const sink = new TelephonySink(ws, () => streamId, format);
@@ -177,6 +179,10 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
       },
     };
 
+    live = new LiveCall(setup.callId, setup.orgId, sink, {
+      onSupervisorLine: (text, atMs) => void persist((tx) => addTranscriptLine(tx, setup.orgId, setup.callId, "supervisor", text, atMs + atOffsetMs, null)),
+      onSupervisorEvent: (type, payload) => void persist((tx) => addEvent(tx, setup.orgId, setup.callId, type, payload)),
+    });
     conv = new Conversation({
       system: buildSystemPrompt(data.config, ctx) + (data.lead ? `\nCaller's number for read-back: ${phoneForSpeech(data.lead.phone_e164)}` : ""),
       opening,
@@ -188,10 +194,11 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
       maxDurationSec: data.config.max_duration_sec,
       silenceCheckinSec: data.config.silence_checkin_sec,
       maxSilenceCheckins: data.config.max_silence_checkins,
-      sink,
+      sink: live.sink,
       transcriber: new StreamingTranscriber(inputRate),
       synthesizer: new StreamingSynthesizer(inputRate),
       hooks: {
+        onPartial: (text) => live?.partial(text),
         onTranscript: (l) => {
           void persist((tx) => addTranscriptLine(tx, setup.orgId, setup.callId, l.speaker, l.text, l.atMs + atOffsetMs, l.language));
           // Backup voicemail detector reading the first thing the line says.
@@ -229,11 +236,15 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
             return false;
           }
         },
-        onEnd: (kind: EndKind) => void onEnded(kind),
+        onEnd: (kind: EndKind) => {
+          live?.close();
+          void onEnded(kind);
+        },
         onError: (e) => log.warn("conversation error", { callId: setup.callId, err: String(e) }),
       },
     });
 
+    live.conv = conv;
     // If async machine detection already flagged voicemail, leave the message.
     if (data.call.state === "voicemail" && voicemailText) {
       await conv.sayAndEnd(voicemailText, "agent_ended");
@@ -278,7 +289,9 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
       case "media": {
         if (!conv || !msg.media?.payload || (msg.media.track && msg.media.track !== "inbound")) return;
         const bytes = Buffer.from(msg.media.payload, "base64");
-        conv.pushAudio(format === "l16-16k" ? bytesToPcm16(new Uint8Array(bytes)) : mulawToPcm16(new Uint8Array(bytes)));
+        const pcm = format === "l16-16k" ? bytesToPcm16(new Uint8Array(bytes)) : mulawToPcm16(new Uint8Array(bytes));
+        live?.caller(pcm);
+        conv.pushAudio(pcm);
         break;
       }
       case "stop":

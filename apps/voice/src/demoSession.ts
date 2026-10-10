@@ -11,6 +11,7 @@ import { searchKnowledge } from "@cloudivoice/core/services/knowledge";
 import { Conversation } from "./conversation";
 import { BrowserSink } from "./sinks";
 import { StreamingSynthesizer, StreamingTranscriber } from "./realtime";
+import { LiveCall } from "./liveCalls";
 import { log } from "./log";
 import { summarizeAndStore } from "./postCall";
 
@@ -134,6 +135,10 @@ export async function handleAgentTest(ws: WebSocket, claims: AgentTestClaims) {
   const { config, callId } = setup;
   const startedAt = Date.now();
   const ctx = { direction: "test" as const, canTransfer: false, timezone: setup.timezone };
+  const live = new LiveCall(callId, claims.orgId, new BrowserSink(ws), {
+    onSupervisorLine: (text, atMs) => void persist((tx) => addTranscriptLine(tx, claims.orgId, callId, "supervisor", text, atMs, null)),
+    onSupervisorEvent: (type, payload) => void persist((tx) => addEvent(tx, claims.orgId, callId, type, payload)),
+  });
 
   const conv = new Conversation({
     system: buildSystemPrompt(config, ctx),
@@ -155,10 +160,11 @@ export async function handleAgentTest(ws: WebSocket, claims: AgentTestClaims) {
     maxDurationSec: Math.min(claims.maxSeconds, config.max_duration_sec),
     silenceCheckinSec: config.silence_checkin_sec,
     maxSilenceCheckins: config.max_silence_checkins,
-    sink: new BrowserSink(ws),
+    sink: live.sink,
     transcriber: new StreamingTranscriber(16000),
     synthesizer: new StreamingSynthesizer(16000),
     hooks: {
+      onPartial: (text) => live.partial(text),
       onStatus: (status) => send({ type: "status", status }),
       onTranscript: (l) => {
         send({ type: "transcript", speaker: l.speaker, text: l.text, atMs: l.atMs, language: l.language });
@@ -169,6 +175,7 @@ export async function handleAgentTest(ws: WebSocket, claims: AgentTestClaims) {
         void persist((tx) => addEvent(tx, claims.orgId, callId, "tool", { name: t.name, input: t.input, result: t.result.slice(0, 500), is_error: t.isError }));
       },
       onEnd: (reason) => {
+        live.close();
         send({ type: "ended", reason });
         const duration = Math.round((Date.now() - startedAt) / 1000);
         void persist(async (tx) => {
@@ -187,7 +194,11 @@ export async function handleAgentTest(ws: WebSocket, claims: AgentTestClaims) {
   ws.on("message", (raw, isBinary) => {
     if (isBinary) {
       const buf = raw as Buffer;
-      if (buf.length > 0 && buf.length <= 32000) conv.pushAudio(bytesToPcm16(new Uint8Array(buf)));
+      if (buf.length > 0 && buf.length <= 32000) {
+        const pcm = bytesToPcm16(new Uint8Array(buf));
+        live.caller(pcm);
+        conv.pushAudio(pcm);
+      }
       return;
     }
     try {
@@ -196,6 +207,7 @@ export async function handleAgentTest(ws: WebSocket, claims: AgentTestClaims) {
       /* ignore */
     }
   });
+  live.conv = conv;
   ws.on("close", () => conv.finish("caller_hung_up"));
   send({ type: "ready", maxSeconds: claims.maxSeconds });
   conv.start().catch((e) => {

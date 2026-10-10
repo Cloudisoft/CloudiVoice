@@ -20,6 +20,7 @@ import { handlePhoneStream } from "./phoneSession";
 import { handleAgentTest, handleDemo, type AgentTestClaims, type DemoClaims } from "./demoSession";
 import { backfillRecordings, enforceRetention } from "./jobs";
 import { fetchRecordingsNow } from "./postCall";
+import { handleMonitor, type MonitorClaims } from "./liveCalls";
 import { log } from "./log";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -225,6 +226,12 @@ server.on("upgrade", (req, socket, head) => {
     const claims = verifyPayload<{ kind: string; callId: string; orgId: string; resume?: "transfer_failed" }>(token);
     if (!claims || claims.kind !== "call") return socket.destroy();
     wss.handleUpgrade(req, socket, head, (ws) => handlePhoneStream(ws, { callId: claims.callId, orgId: claims.orgId, resume: claims.resume }));
+    return;
+  }
+  if (url.pathname === "/monitor") {
+    const claims = verifyPayload<MonitorClaims>(token);
+    if (!claims || claims.kind !== "monitor") return socket.destroy();
+    wss.handleUpgrade(req, socket, head, (ws) => handleMonitor(ws, claims));
     return;
   }
   if (url.pathname === "/demo") {

@@ -45,6 +45,8 @@ export interface ConversationHooks {
   onError?(err: unknown): void;
   /** Every PCM frame the agent sends to the caller (for supervisor listening). */
   onAgentAudio?(pcm: Int16Array): void;
+  /** Caller words as they are being spoken (not final). */
+  onPartial?(text: string): void;
 }
 
 export type EndKind = "agent_ended" | "caller_hung_up" | "max_duration" | "silence_timeout" | "transferred" | "error";
@@ -180,6 +182,7 @@ export class Conversation {
   private textChain: Promise<void> = Promise.resolve();
   private bargeAt: number | null = null;
   private turnStartedAt = 0;
+  private lastPartial = "";
 
   constructor(private readonly o: ConversationOptions) {
     this.brain = new AgentBrain(o.system, o.tools);
@@ -278,6 +281,8 @@ export class Conversation {
   }
 
   private onPartial(text: string) {
+    if (text !== this.lastPartial) this.o.hooks.onPartial?.(text);
+    this.lastPartial = text;
     this.segHesitant = TRAILING.test(text.trim());
     // A real interruption: words that aren't just "haan / hmm / ok".
     if (this.bargeAt !== null && !BACKCHANNEL.test(text.trim()) && text.trim().split(/\s+/).length >= 2) this.interrupt();

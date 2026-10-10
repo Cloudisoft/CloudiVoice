@@ -91,7 +91,7 @@ export async function transition(
   return true;
 }
 
-export async function addTranscriptLine(tx: Tx, orgId: string, callId: string, speaker: "agent" | "caller" | "system", text: string, atMs: number, language?: string | null) {
+export async function addTranscriptLine(tx: Tx, orgId: string, callId: string, speaker: "agent" | "caller" | "system" | "supervisor", text: string, atMs: number, language?: string | null) {
   if (!text.trim()) return;
   await tx`insert into transcript_lines (org_id, call_id, speaker, text, at_ms, language)
            values (${orgId}, ${callId}, ${speaker}, ${text.slice(0, 4000)}, ${Math.max(0, Math.round(atMs))}, ${language ?? null})`;

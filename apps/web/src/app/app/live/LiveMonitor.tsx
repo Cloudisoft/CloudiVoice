@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { superviseAction } from "./actions";
+import { useCallMonitor } from "./useCallMonitor";
 
 interface LiveCall {
   id: string;
@@ -23,6 +24,37 @@ interface Line {
 
 const STATE: Record<string, string> = { queued: "Queued", ringing: "Ringing", answered: "Answered", in_progress: "In conversation", voicemail: "Voicemail", transferring: "Transferring" };
 
+/** Tiny live level meters for each side of the call. */
+function Meters({ levels }: { levels: React.RefObject<Record<"caller" | "agent" | "supervisor", number>> }) {
+  const bars = useRef<Record<string, HTMLSpanElement | null>>({});
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      for (const k of ["caller", "agent", "supervisor"] as const) {
+        const el = bars.current[k];
+        const v = levels.current[k];
+        if (el) el.style.transform = `scaleX(${Math.min(1, v * 2.2).toFixed(3)})`;
+        levels.current[k] = v * 0.9;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [levels]);
+  return (
+    <div className="monitor-meters" aria-hidden>
+      {(["caller", "agent", "supervisor"] as const).map((k) => (
+        <div key={k} className="monitor-meter">
+          <span className={`s-${k}`}>{k === "supervisor" ? "you" : k}</span>
+          <i>
+            <span ref={(el) => void (bars.current[k] = el)} className={`bar-${k}`} />
+          </i>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function elapsed(iso: string, now: number) {
   const s = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 1000));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -37,11 +69,14 @@ export function LiveMonitor({ canSupervise, canTransfer }: { canSupervise: boole
   const [msg, setMsg] = useState<string | null>(null);
   const after = useRef(0);
   const box = useRef<HTMLDivElement>(null);
+  const mon = useCallMonitor();
+  const { stop: stopListening } = mon;
 
   useEffect(() => {
     after.current = 0;
     setLines([]);
-  }, [selected]);
+    stopListening();
+  }, [selected, stopListening]);
 
   useEffect(() => {
     let stop = false;
@@ -73,7 +108,7 @@ export function LiveMonitor({ canSupervise, canTransfer }: { canSupervise: boole
 
   useEffect(() => {
     box.current?.scrollTo({ top: box.current.scrollHeight });
-  }, [lines]);
+  }, [lines, mon.partial]);
 
   const current = calls.find((c) => c.id === selected);
 
@@ -142,12 +177,60 @@ export function LiveMonitor({ canSupervise, canTransfer }: { canSupervise: boole
               <div ref={box} className="transcript" style={{ maxHeight: 420, overflowY: "auto" }} aria-live="polite">
                 {lines.length === 0 && <p className="field-hint">Waiting for the first words…</p>}
                 {lines.map((l) => (
-                  <div key={l.id} className="tline" style={{ gridTemplateColumns: "60px 1fr" }}>
+                  <div key={l.id} className="tline" style={{ gridTemplateColumns: "76px 1fr" }}>
                     <span className={`s s-${l.speaker}`}>{l.speaker}</span>
                     <span>{l.text}</span>
                   </div>
                 ))}
+                {mon.partial && (mon.state === "listening" || mon.state === "barged") && (
+                  <div className="tline tline-partial" style={{ gridTemplateColumns: "76px 1fr" }}>
+                    <span className="s s-caller">caller</span>
+                    <span>{mon.partial}…</span>
+                  </div>
+                )}
               </div>
+              {canSupervise && current && (
+                <div className="monitor-bar">
+                  <div className="monitor-status">
+                    {mon.state === "idle" && <span className="field-hint">Listen in to hear both sides live. Take over to speak to the caller yourself.</span>}
+                    {mon.state === "connecting" && <span className="chip chip-dot">Connecting audio…</span>}
+                    {mon.state === "listening" && (
+                      <span className="chip chip-dot chip-ok">{mon.bargedBy ? `Listening · ${mon.bargedBy} is on the call` : "Listening live"}</span>
+                    )}
+                    {mon.state === "barged" && <span className="chip chip-dot chip-warn">You’re on the call · agent paused</span>}
+                    {mon.state === "ended" && <span className="chip">Call ended</span>}
+                    {mon.error && <span className="field-hint" role="alert">{mon.error}</span>}
+                  </div>
+                  {(mon.state === "listening" || mon.state === "barged") && <Meters levels={mon.levels} />}
+                  <div className="form-actions" style={{ marginTop: 0 }}>
+                    {mon.state === "idle" || mon.state === "ended" || mon.state === "error" ? (
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => void mon.listen(current.id)}>
+                        Listen live
+                      </button>
+                    ) : (
+                      <button type="button" className="btn btn-quiet btn-sm" onClick={mon.stop}>
+                        Stop listening
+                      </button>
+                    )}
+                    {mon.state === "listening" && !mon.bargedBy && (
+                      <button type="button" className="btn btn-primary btn-sm" onClick={() => void mon.barge()} title="The agent goes quiet and the caller hears you">
+                        Barge in
+                      </button>
+                    )}
+                    {mon.state === "barged" && (
+                      <>
+                        <button type="button" className="btn btn-quiet btn-sm" onClick={() => mon.setMuted(!mon.muted)} aria-pressed={mon.muted}>
+                          {mon.muted ? "Unmute mic" : "Mute mic"}
+                        </button>
+                        <button type="button" className="btn btn-primary btn-sm" onClick={mon.handBack}>
+                          Hand back to AI
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {mon.state === "barged" && <p className="field-hint" style={{ margin: 0 }}>Use headphones so the caller doesn’t hear an echo. The agent picks up from where you leave off.</p>}
+                </div>
+              )}
               {msg && <div className="notice" style={{ marginTop: 10 }}>{msg}</div>}
               {canSupervise && current && (
                 <form

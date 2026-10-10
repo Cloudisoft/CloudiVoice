@@ -44,6 +44,18 @@ recording ──► POST /Call/{uuid}/Record/ → callback /telephony/recording 
   (documented range 2000–10000). A transcript-based backup detector also runs.
 - Hangup causes are mapped to neutral end reasons in `mapHangupCause`.
 
+## Transfers
+
+- The agent's handoff line plays, and the call is redirected ~350 ms before it ends (`/telephony/transfer-xml` → `<Dial dialMusic="real">`), so the caller hears ringback with no gap.
+- `Dial action` → `/telephony/transfer-result`: if the person answered, the call hangs up when they finish. If nobody answered, the response is a fresh `<Stream>` whose token carries `resume=transfer_failed`; the agent rejoins and offers a callback. Nothing is recorded twice, and transcript times continue.
+
+## Supervisor listening and barge-in
+
+- Browser → `POST /api/live/monitor` (permission `calls.supervise`) → 60 s token → `wss://<voice>/monitor`.
+- The gateway streams tagged PCM frames (1 caller, 2 agent, 3 supervisor) at the call's rate, plus partial transcripts.
+- Barge-in pauses the agent, plays the supervisor's mic to the caller and transcribes it (speaker `supervisor`). Hand back resumes the agent with a note.
+- The live-call registry is **in-process**. Run one voice gateway replica, or route `/monitor` with sticky routing to the instance that holds the call.
+
 ## Verification checklist before go-live
 
 - [ ] Inbound call to a synced number reaches the assigned agent.

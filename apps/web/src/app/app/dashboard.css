@@ -774,3 +774,57 @@
     grid-template-columns: 100px 1fr 40px;
   }
 }
+.tline .s-supervisor {
+  color: var(--ok);
+}
+.tline-partial {
+  opacity: 0.6;
+  font-style: italic;
+}
+.monitor-bar {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+}
+.monitor-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.monitor-meters {
+  display: grid;
+  gap: 6px;
+}
+.monitor-meter {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.monitor-meter i {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.monitor-meter i span {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 80ms linear;
+}
+.monitor-meter .bar-caller {
+  background: var(--caller);
+}
+.monitor-meter .bar-agent {
+  background: var(--accent);
+}
+.monitor-meter .bar-supervisor {
+  background: var(--ok);
+}
