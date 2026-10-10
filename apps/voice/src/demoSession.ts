@@ -12,6 +12,7 @@ import { Conversation } from "./conversation";
 import { BrowserSink } from "./sinks";
 import { StreamingSynthesizer, StreamingTranscriber } from "./realtime";
 import { log } from "./log";
+import { summarizeAndStore } from "./postCall";
 
 export interface DemoClaims {
   kind: "demo";
@@ -173,7 +174,7 @@ export async function handleAgentTest(ws: WebSocket, claims: AgentTestClaims) {
         void persist(async (tx) => {
           await transition(tx, callId, "completed", { endReason: reason === "caller_hung_up" ? "caller_hung_up" : reason === "error" ? "unknown" : (reason as EndReason), durationSec: duration });
           await finalizeCall(tx, callId);
-        });
+        }).then(() => setTimeout(() => void summarizeAndStore(claims.orgId, callId), 1500));
         setTimeout(() => ws.close(), 1500);
       },
       onError: (e) => {

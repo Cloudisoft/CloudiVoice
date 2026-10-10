@@ -12,14 +12,22 @@ import { log } from "./log";
 
 const WS_BASE = () => env.speechApiBase.replace(/^http/, "ws");
 
+/**
+ * Streaming speech-to-text, organised in segments. A segment opens when the
+ * caller starts speaking and is finalized as soon as they pause briefly, so
+ * the transcript is ready before the turn is formally over. If the caller
+ * keeps talking, a new segment opens and the engine merges the pieces.
+ */
 export interface Transcriber {
-  /** A new utterance begins; `preroll` is audio captured just before speech was confirmed. */
-  begin(preroll: Int16Array[]): void;
+  readonly isOpen: boolean;
+  open(preroll: Int16Array[]): void;
   push(pcm: Int16Array): void;
-  /** The utterance ended; resolves with its transcript. `pcm` is the whole utterance for fallback. */
-  end(pcm: Int16Array): Promise<Transcript>;
-  /** The utterance was noise; discard it. */
-  cancel(): void;
+  /** Finalize the open segment. Resolves null if the engine couldn't (caller falls back to REST). */
+  finalize(): Promise<Transcript | null>;
+  /** Drop the open segment (noise). */
+  discard(): void;
+  /** Live partial transcript of the open segment. */
+  onPartial: ((text: string) => void) | null;
   close(): void;
 }
 
@@ -36,13 +44,18 @@ export class StreamingTranscriber implements Transcriber {
   private ready = false;
   private closed = false;
   private pending: { resolve: (t: Transcript | null) => void; discard: boolean }[] = [];
-  private inUtterance = false;
+  private open_ = false;
   private ping: NodeJS.Timeout;
   private failures = 0;
+  onPartial: ((text: string) => void) | null = null;
 
   constructor(private readonly sampleRate: 8000 | 16000) {
     this.connect();
     this.ping = setInterval(() => this.send({ event: "ping" }), 20_000);
+  }
+
+  get isOpen() {
+    return this.open_;
   }
 
   private connect() {
@@ -68,7 +81,9 @@ export class StreamingTranscriber implements Transcriber {
       } catch {
         return;
       }
-      if (e.event === "transcript.final") {
+      if (e.event === "transcript.partial") {
+        if (this.open_ && e.text) this.onPartial?.(e.text);
+      } else if (e.event === "transcript.final") {
         const p = this.pending.shift();
         p?.resolve(p.discard ? null : { text: (e.text ?? "").trim(), language: e.language ?? null });
       } else if (e.event === "error") {
@@ -77,6 +92,7 @@ export class StreamingTranscriber implements Transcriber {
     });
     const down = () => {
       this.ready = false;
+      this.open_ = false;
       // Anything waiting on this socket falls back to REST.
       for (const p of this.pending.splice(0)) p.resolve(null);
       if (!this.closed && this.failures++ < 5) setTimeout(() => this.connect(), 500 * this.failures);
@@ -97,38 +113,35 @@ export class StreamingTranscriber implements Transcriber {
     this.send({ event: "audio_input", audio: Buffer.from(pcm16ToBytes(pcm)).toString("base64") });
   }
 
-  begin(preroll: Int16Array[]) {
-    if (!this.send({ event: "speech_start" })) return;
-    this.inUtterance = true;
+  open(preroll: Int16Array[]) {
+    if (this.open_ || !this.send({ event: "speech_start" })) return;
+    this.open_ = true;
     for (const p of preroll) this.sendAudio(p);
   }
 
   push(pcm: Int16Array) {
-    if (this.inUtterance) this.sendAudio(pcm);
+    if (this.open_) this.sendAudio(pcm);
   }
 
-  async end(pcm: Int16Array): Promise<Transcript> {
-    if (this.inUtterance && this.send({ event: "speech_end" })) {
-      this.inUtterance = false;
-      const result = await new Promise<Transcript | null>((resolve) => {
-        const entry = { resolve, discard: false };
-        this.pending.push(entry);
-        setTimeout(() => {
+  finalize(): Promise<Transcript | null> {
+    if (!this.open_) return Promise.resolve(null);
+    this.open_ = false;
+    if (!this.send({ event: "flush" })) return Promise.resolve(null);
+    return new Promise<Transcript | null>((resolve) => {
+      const entry = { resolve, discard: false };
+      this.pending.push(entry);
+      setTimeout(() => {
+        if (!entry.discard) {
           entry.discard = true;
           resolve(null);
-        }, 4000);
-      });
-      if (result) return result;
-    }
-    this.inUtterance = false;
-    // Fallback: one-shot REST transcription of the whole utterance.
-    const rate = this.sampleRate < 16000 ? 16000 : this.sampleRate;
-    return transcribe(rate === this.sampleRate ? pcm : resample(pcm, this.sampleRate, rate), rate);
+        }
+      }, 3000);
+    });
   }
 
-  cancel() {
-    if (this.inUtterance && this.send({ event: "speech_end" })) this.pending.push({ resolve: () => {}, discard: true });
-    this.inUtterance = false;
+  discard() {
+    if (this.open_ && this.send({ event: "flush" })) this.pending.push({ resolve: () => {}, discard: true });
+    this.open_ = false;
   }
 
   close() {
@@ -141,6 +154,12 @@ export class StreamingTranscriber implements Transcriber {
       /* ignore */
     }
   }
+}
+
+/** REST transcription of a finished segment (fallback path). */
+export async function transcribeSegment(pcm: Int16Array, sampleRate: number): Promise<Transcript> {
+  const rate = sampleRate < 16000 ? 16000 : sampleRate;
+  return transcribe(rate === sampleRate ? pcm : resample(pcm, sampleRate, rate), rate);
 }
 
 // ---------------------------------------------------------------------------

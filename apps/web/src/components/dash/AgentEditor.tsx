@@ -183,8 +183,9 @@ export function AgentEditor({ id, name, config, useCases, languages, voices, can
               </span>
             </div>
             <div className="field span-2">
-              <label htmlFor="a-ins">Instructions &amp; business details</label>
-              <textarea id="a-ins" name="instructions" className="textarea" style={{ minHeight: 160 }} defaultValue={config.instructions} placeholder="Hours, prices, policies, what to ask and in what order…" />
+              <label htmlFor="a-ins">Call script, SOP &amp; business details</label>
+              <textarea id="a-ins" name="instructions" className="textarea" style={{ minHeight: 160 }} defaultValue={config.instructions} placeholder={"1. Greet and confirm the caller’s name\n2. Ask what they need…\nHours, prices, policies, escalation rules"} />
+              <span className="field-hint">The agent follows your flow and policies but speaks naturally, adapting to what the caller says instead of reading word-for-word.</span>
               {err("instructions")}
             </div>
             <div className="field">

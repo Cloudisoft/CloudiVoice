@@ -11,6 +11,9 @@ class PlayoutClock {
   reset() {
     this.until = Date.now();
   }
+  remaining() {
+    return Math.max(0, this.until - Date.now());
+  }
   async drained() {
     for (;;) {
       const wait = this.until - Date.now();
@@ -60,6 +63,10 @@ export class TelephonySink implements AudioSink {
   drained() {
     return this.clock.drained();
   }
+
+  remainingMs() {
+    return this.clock.remaining();
+  }
 }
 
 /** Browser demo sink: binary PCM16 frames + JSON control messages. */
@@ -82,6 +89,10 @@ export class BrowserSink implements AudioSink {
 
   drained() {
     return this.clock.drained();
+  }
+
+  remainingMs() {
+    return this.clock.remaining();
   }
 }
 

@@ -39,10 +39,14 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   const live = !["completed", "failed"].includes(c.state);
   const sig = c.recording_key && hasPermission(user, "recordings.listen") ? signPayload({ callId: id, orgId: user.orgId }, 600) : null;
   const t0 = new Date(c.created_at).getTime();
+  // Right after the call: keep refreshing until the summary and recording land.
+  const justEnded = !live && c.ended_at != null && Date.now() - new Date(c.ended_at).getTime() < 5 * 60_000;
+  const awaitingSummary = justEnded && !c.summary && d.transcript.length > 0;
+  const awaitingRecording = justEnded && (c.recording_status === "pending" || c.recording_status === "failed") && !c.recording_key;
 
   return (
     <>
-      {live && <AutoRefresh seconds={3} />}
+      {(live || awaitingSummary || awaitingRecording) && <AutoRefresh seconds={live ? 2 : 3} />}
       <PageHeader
         title={c.lead_name ?? (c.direction === "test" && !c.to_e164 ? "Browser test call" : "No name on file")}
         crumbs={[{ href: "/app/calls", label: "Call Records" }]}
@@ -70,6 +74,16 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
               <div className="panel-body">
                 <p style={{ margin: 0 }}>{c.summary}</p>
                 {c.qa?.notes && <p className="field-hint" style={{ marginBottom: 0 }}>{c.qa.notes}</p>}
+              </div>
+            </section>
+          )}
+          {(awaitingSummary || awaitingRecording) && (
+            <section className="panel">
+              <div className="panel-body" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <span className="chip chip-accent chip-dot">Processing</span>
+                <span className="field-hint" style={{ margin: 0 }}>
+                  {awaitingSummary && awaitingRecording ? "Preparing the summary and saving the recording…" : awaitingSummary ? "Preparing the call summary and QA score…" : "Saving the recording…"} This page updates automatically.
+                </span>
               </div>
             </section>
           )}

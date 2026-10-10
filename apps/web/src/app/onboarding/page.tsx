@@ -226,7 +226,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
           <form action={instructionsStep} className="panel panel-body form-grid">
             {carry}
             <div className="field span-2">
-              <label htmlFor="n-ins">What should the agent know?</label>
+              <label htmlFor="n-ins">Your call script, SOP and business details</label>
               <textarea id="n-ins" name="instructions" className="textarea" style={{ minHeight: 180 }} defaultValue={cfg.instructions.replace(/Sunrise Multispeciality Clinic|Skyline Homes|QuickCart|TalentBridge Staffing|Brightpath Academy/g, org.name)} placeholder="Opening hours, services, prices, policies, what to ask and in what order…" />
             </div>
             <div className="field">

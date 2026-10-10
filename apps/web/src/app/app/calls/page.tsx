@@ -3,6 +3,7 @@ import { endReasonText, OUTCOMES } from "@cloudivoice/core/outcomes";
 import { formatPhone } from "@cloudivoice/core/phone";
 import { formatInr } from "@cloudivoice/core/pricing";
 import { listCalls } from "@cloudivoice/core/services/calls";
+import { AutoRefresh } from "@/components/ui/AutoRefresh";
 import { Icon } from "@/components/ui/Icon";
 import { EmptyState, fmtDate, fmtDuration, OutcomeChip, PageHeader, Pager, qs, StateChip } from "@/components/ui/kit";
 import { hasPermission, tenant } from "@/lib/session";
@@ -21,8 +22,11 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
   }), "calls.view");
   const base = { q: sp.q, campaign: sp.campaign, agent: sp.agent, outcome: sp.outcome, direction: sp.direction, from: sp.from, to: sp.to };
   const filtered = Object.values(base).some(Boolean);
+  // New and in-progress calls show up (and settle) without a manual reload.
+  const active = page === 1 && data.rows.some((c) => !["completed", "failed"].includes(c.state) || Date.now() - new Date(c.created_at).getTime() < 10 * 60_000);
   return (
     <>
+      {active && <AutoRefresh seconds={4} />}
       <PageHeader
         title="Call Records"
         sub="Every call with its timeline, transcript, outcome, cost and the reason it ended — in plain words."

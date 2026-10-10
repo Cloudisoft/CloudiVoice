@@ -314,9 +314,16 @@ export class PrimaryCarrierAdapter implements TelephonyAdapter {
   transferResponse(opts: { toE164: string; callerId: string; actionUrl: string }) {
     return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial callerId="${xmlEscape(toCarrierNumber(opts.callerId))}" timeout="30" action="${xmlEscape(opts.actionUrl)}" method="POST" redirect="true">
+  <Dial callerId="${xmlEscape(toCarrierNumber(opts.callerId))}" timeout="30" dialMusic="real" action="${xmlEscape(opts.actionUrl)}" method="POST" redirect="true">
     <Number>${xmlEscape(toCarrierNumber(opts.toE164))}</Number>
   </Dial>
+</Response>`;
+  }
+
+  hangupResponse() {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Hangup/>
 </Response>`;
   }
 

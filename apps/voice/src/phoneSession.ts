@@ -2,7 +2,7 @@ import type WebSocket from "ws";
 import { parseAgentConfig, fillTemplate } from "@cloudivoice/core/agentConfig";
 import { buildSystemPrompt, openingLine, templateVars, type CallContext } from "@cloudivoice/core/agentPrompt";
 import { bytesToPcm16, mulawToPcm16 } from "@cloudivoice/core/audio";
-import { summarizeCall, type ToolHost, type ToolName } from "@cloudivoice/core/brain";
+import { type ToolHost, type ToolName } from "@cloudivoice/core/brain";
 import { withTenant } from "@cloudivoice/core/db/client";
 import { env } from "@cloudivoice/core/env";
 import { phoneForSpeech } from "@cloudivoice/core/phone";
@@ -16,6 +16,7 @@ import { Conversation, type EndKind } from "./conversation";
 import { TelephonySink } from "./sinks";
 import { StreamingSynthesizer, StreamingTranscriber } from "./realtime";
 import { log } from "./log";
+import { summarizeAndStore } from "./postCall";
 
 const VOICEMAIL_GREETING =
   /(leave (a|your) message|after the (tone|beep)|not available|person you are trying to reach|number you have dial|switched off|not reachable|संदेश|उपलब्ध नहीं|स्विच ऑफ)/i;
@@ -23,6 +24,8 @@ const VOICEMAIL_GREETING =
 interface CallSetup {
   orgId: string;
   callId: string;
+  /** Reconnected to the agent because the person we transferred to didn't answer. */
+  resume?: "transfer_failed";
 }
 
 /**
@@ -33,9 +36,11 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
   let streamId = "";
   let conv: Conversation | null = null;
   let providerCallId: string | null = null;
-  let firstCallerLine = true;
+  let firstCallerLine = !setup.resume;
   let transferNumber = "";
   let callerId = "";
+  let transferring = false;
+  let atOffsetMs = 0; // keeps transcript times continuous when the agent rejoins after a transfer
   const format = env.telephonyStreamFormat;
   const sink = new TelephonySink(ws, () => streamId, format);
   const inputRate = format === "l16-16k" ? 16000 : 8000;
@@ -55,7 +60,8 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
         from_e164: string | null;
         to_e164: string | null;
         provider_call_id: string | null;
-      }[]>`select state, direction, agent_id, agent_version, lead_id, campaign_id, from_e164, to_e164, provider_call_id from calls where id = ${setup.callId}`;
+        answered_at: Date | null;
+      }[]>`select state, direction, agent_id, agent_version, lead_id, campaign_id, from_e164, to_e164, provider_call_id, answered_at from calls where id = ${setup.callId}`;
       if (!call?.agent_id) throw new Error("Call has no agent");
       const [v] = await tx<{ config: unknown }[]>`select config from agent_versions where agent_id = ${call.agent_id} and version = ${call.agent_version}`;
       const [org] = await tx<{ timezone: string; record_calls: boolean; recording_disclosure: string; calling_window_start: string; calling_window_end: string; calling_days: number[] }[]>`
@@ -91,9 +97,18 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
     };
     let opening = openingLine(data.config, ctx);
     if (data.org.record_calls && data.config.recording_disclosure) opening = `${data.org.recording_disclosure} ${opening}`;
+    if (setup.resume === "transfer_failed") {
+      // Back from an unanswered transfer: no new greeting, no recording restart.
+      opening =
+        data.config.primary_language === "hi-IN"
+          ? "माफ़ कीजिए, अभी हमारी team से कोई उपलब्ध नहीं है। क्या मैं आपके लिए callback schedule कर दूँ?"
+          : "I'm sorry, nobody from the team could pick up right now. Shall I schedule a callback for you?";
+      if (data.call.answered_at) atOffsetMs = Date.now() - new Date(data.call.answered_at).getTime();
+      void persist((tx) => tx`update calls set transfer_status = coalesce(transfer_status, 'failed') where id = ${setup.callId}`);
+    }
     const voicemailText = fillTemplate(data.cp?.voicemail_message || data.config.voicemail_message || "", templateVars(data.config, ctx));
 
-    if (data.org.record_calls && providerCallId) {
+    if (data.org.record_calls && providerCallId && !setup.resume) {
       telephony()
         ?.startRecording(providerCallId, `${env.voiceUrl}/telephony/recording?callId=${setup.callId}`)
         .catch((e: unknown) => log.warn("recording start failed", { callId: setup.callId, err: String(e) }));
@@ -178,7 +193,7 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
       synthesizer: new StreamingSynthesizer(inputRate),
       hooks: {
         onTranscript: (l) => {
-          void persist((tx) => addTranscriptLine(tx, setup.orgId, setup.callId, l.speaker, l.text, l.atMs, l.language));
+          void persist((tx) => addTranscriptLine(tx, setup.orgId, setup.callId, l.speaker, l.text, l.atMs + atOffsetMs, l.language));
           // Backup voicemail detector reading the first thing the line says.
           if (l.speaker === "caller" && firstCallerLine) {
             firstCallerLine = false;
@@ -196,6 +211,7 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
         onTransfer: async () => {
           const adapter = telephony();
           if (!adapter || !providerCallId || !transferNumber) return false;
+          transferring = true;
           try {
             await persist(async (tx) => {
               await transition(tx, setup.callId, "transferring");
@@ -204,6 +220,7 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
             await adapter.transfer(providerCallId, transferNumber, callerId, setup.callId);
             return true;
           } catch (e) {
+            transferring = false;
             log.error("transfer failed", { callId: setup.callId, err: String(e) });
             await persist(async (tx) => {
               await tx`update calls set transfer_status = 'failed' where id = ${setup.callId}`;
@@ -237,18 +254,8 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
       await sink.drained();
       await telephony()?.hangup(providerCallId).catch(() => {});
     }
-    // Post-call summary + QA score (best effort, off the critical path).
-    setTimeout(() => void summarize(), 4000);
-  }
-
-  async function summarize() {
-    try {
-      const lines = await withTenant(setup.orgId, (tx) => tx<{ speaker: string; text: string }[]>`select speaker, text from transcript_lines where call_id = ${setup.callId} order by id`);
-      const s = await summarizeCall(lines);
-      if (s) await persist((tx) => tx`update calls set summary = ${s.summary}, qa = ${tx.json({ score: s.score, notes: s.notes })} where id = ${setup.callId}`);
-    } catch (e) {
-      log.warn("summary failed", { callId: setup.callId, err: String(e) });
-    }
+    // Post-call summary + QA score, once the last transcript lines are written.
+    setTimeout(() => void summarizeAndStore(setup.orgId, setup.callId), 1500);
   }
 
   ws.on("message", (raw, isBinary) => {
@@ -275,10 +282,11 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
         break;
       }
       case "stop":
-        conv?.finish("caller_hung_up");
+        // The stream also stops when the call is bridged to a person.
+        conv?.finish(transferring ? "transferred" : "caller_hung_up");
         break;
     }
   });
-  ws.on("close", () => conv?.finish("caller_hung_up"));
+  ws.on("close", () => conv?.finish(transferring ? "transferred" : "caller_hung_up"));
   ws.on("error", (e) => log.warn("media socket error", { callId: setup.callId, err: String(e) }));
 }

@@ -67,6 +67,8 @@ export interface TelephonyAdapter {
   transferResponse(opts: { toE164: string; callerId: string; actionUrl: string }): string;
   /** XML for a short spoken message followed by hangup (e.g. outside hours). */
   sayAndHangupResponse(text: string, language: string): string;
+  /** End the call (used after a completed transfer). */
+  hangupResponse(): string;
 }
 
 /** Plain-language error for customers; the technical cause goes to logs. */

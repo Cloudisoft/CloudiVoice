@@ -19,6 +19,7 @@ import { processTelephonyEvent, reconcileCalls, type TelephonyEventKind } from "
 import { handlePhoneStream } from "./phoneSession";
 import { handleAgentTest, handleDemo, type AgentTestClaims, type DemoClaims } from "./demoSession";
 import { backfillRecordings, enforceRetention } from "./jobs";
+import { fetchRecordingsNow } from "./postCall";
 import { log } from "./log";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -68,6 +69,7 @@ async function handleEvent(req: IncomingMessage, res: ServerResponse, kind: Tele
     try {
       await processTelephonyEvent(kind, params, callId);
       await markWebhook(id, null);
+      if (kind === "recording") fetchRecordingsNow();
     } catch (e) {
       log.error("webhook processing failed", { kind, callId, err: String(e) });
       await markWebhook(id, e instanceof Error ? e.message : String(e));
@@ -76,9 +78,9 @@ async function handleEvent(req: IncomingMessage, res: ServerResponse, kind: Tele
   send(res, 200, "ok");
 }
 
-function streamXml(callId: string, orgId: string, maxSeconds: number) {
+function streamXml(callId: string, orgId: string, maxSeconds: number, resume?: "transfer_failed") {
   const adapter = telephony()!;
-  const token = signPayload({ kind: "call", callId, orgId }, 4 * 3600);
+  const token = signPayload({ kind: "call", callId, orgId, ...(resume ? { resume } : {}) }, 4 * 3600);
   const wsBase = env.voiceUrl.replace(/^http/, "ws");
   return adapter.streamResponse({
     streamUrl: `${wsBase}/media?token=${encodeURIComponent(token)}`,
@@ -142,6 +144,27 @@ async function handleAnswer(req: IncomingMessage, res: ServerResponse) {
   return xml(res, streamXml(id, num.org_id, 3700));
 }
 
+/**
+ * The bridged leg finished. If the person answered, the call is over; if
+ * nobody picked up, the caller goes straight back to the agent instead of
+ * being disconnected.
+ */
+async function handleTransferResult(req: IncomingMessage, res: ServerResponse) {
+  const { params, callId } = await intake(req, "transfer_result");
+  const dedupe = `transfer_result:${params.CallUUID ?? callId ?? ""}:${params.DialBLegUUID ?? ""}:${params.DialStatus ?? ""}`;
+  const id = await storeWebhook("telephony", "transfer_result", dedupe, { params, callId });
+  if (id !== null) {
+    await processTelephonyEvent("transfer_result", params, callId)
+      .then(() => markWebhook(id, null))
+      .catch((e) => markWebhook(id, e instanceof Error ? e.message : String(e)));
+  }
+  const status = (params.DialStatus ?? params.DialBLegStatus ?? "").toLowerCase();
+  const connected = status === "completed" || status === "answer" || status === "answered";
+  const [call] = callId && /^[0-9a-f-]{36}$/i.test(callId) ? await db()<{ id: string; org_id: string; state: string }[]>`select id, org_id, state from calls where id = ${callId}` : [];
+  if (connected || !call || ["completed", "failed"].includes(call.state)) return xml(res, telephony()!.hangupResponse());
+  return xml(res, streamXml(call.id, call.org_id, 3700, "transfer_failed"));
+}
+
 async function handleTransferXml(req: IncomingMessage, res: ServerResponse) {
   const { url } = await intake(req, "answer");
   const to = normalizePhone(url.searchParams.get("to") ?? "");
@@ -175,8 +198,7 @@ const server = createServer(async (req, res) => {
       case "/telephony/transfer-xml":
         return await handleTransferXml(req, res);
       case "/telephony/transfer-result":
-        await handleEvent(req, res, "transfer_result");
-        return;
+        return await handleTransferResult(req, res);
       default:
         return send(res, 404, "not found");
     }
@@ -187,14 +209,22 @@ const server = createServer(async (req, res) => {
   }
 });
 
+// One misbehaving call must never take the gateway (and every other call) down.
+process.on("unhandledRejection", (e) => {
+  // Cancelled reasoning requests (the caller kept talking) are expected.
+  if (e instanceof Error && /aborted/i.test(e.message)) return;
+  log.error("unhandled rejection", { err: String(e) });
+});
+process.on("uncaughtException", (e) => log.error("uncaught exception", { err: String(e) }));
+
 const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
 server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url ?? "/", "http://x");
   const token = url.searchParams.get("token") ?? "";
   if (url.pathname === "/media") {
-    const claims = verifyPayload<{ kind: string; callId: string; orgId: string }>(token);
+    const claims = verifyPayload<{ kind: string; callId: string; orgId: string; resume?: "transfer_failed" }>(token);
     if (!claims || claims.kind !== "call") return socket.destroy();
-    wss.handleUpgrade(req, socket, head, (ws) => handlePhoneStream(ws, { callId: claims.callId, orgId: claims.orgId }));
+    wss.handleUpgrade(req, socket, head, (ws) => handlePhoneStream(ws, { callId: claims.callId, orgId: claims.orgId, resume: claims.resume }));
     return;
   }
   if (url.pathname === "/demo") {
@@ -236,7 +266,7 @@ async function main() {
   if (process.env.DISABLE_WORKER !== "1") {
     every(5_000, "dialer", () => (telephony() ? dialerTick() : Promise.resolve()));
     every(60_000, "reconcile", () => (acquireLease("reconcile", env.workerId, 120).then((ok) => (ok ? reconcileCalls() : null))));
-    every(5 * 60_000, "recordings", () => (acquireLease("recordings", env.workerId, 600).then((ok) => (ok ? backfillRecordings() : null))));
+    every(60_000, "recordings", () => (acquireLease("recordings", env.workerId, 600).then((ok) => (ok ? backfillRecordings() : null))));
     every(6 * 3600_000, "retention", () => (acquireLease("retention", env.workerId, 3600).then((ok) => (ok ? enforceRetention() : null))));
   }
 }

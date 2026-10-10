@@ -109,22 +109,37 @@ function anthropic() {
   return client;
 }
 
+const ABBREV = /(^|\s)(dr|mr|mrs|ms|prof|sr|jr|st|vs|no|approx|dept|govt|pvt|ltd|co)\.$/i;
+
 /** Split streamed text into speakable sentences. */
 export class SentenceSplitter {
   private buf = "";
+  private first = true;
   push(delta: string): string[] {
     this.buf += delta;
     const out: string[] = [];
+    if (this.first) {
+      // Start speaking at the first clause so the caller hears us sooner.
+      const m = /^(.{12,}?[,—–:;])\s+/s.exec(this.buf);
+      if (m && !/[.!?।]/.test(m[1]!)) {
+        out.push(m[1]!.trim());
+        this.buf = this.buf.slice(m[0].length);
+        this.first = false;
+      }
+    }
     const re = /[.!?।]+["')\]]?\s+|\n+/g;
     let last = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(this.buf))) {
       const end = m.index + m[0].length;
       const candidate = this.buf.slice(last, end).trim();
+      // "Dr. Mehta", "Mr. Rao", "vs. that": not the end of a sentence.
+      if (ABBREV.test(candidate)) continue;
       // Avoid speaking tiny fragments like "Ji." on their own; merge them forward.
       if (candidate.length >= 8) {
         out.push(candidate);
         last = end;
+        this.first = false;
       }
     }
     this.buf = this.buf.slice(last);
@@ -154,10 +169,39 @@ export class AgentBrain {
 
   /** Record what the agent actually said when it was interrupted mid-reply. */
   noteInterrupted(spokenSoFar: string) {
+    const said = spokenSoFar.trim();
+    if (!said) return;
     const last = this.messages.at(-1);
-    if (last?.role === "user" && spokenSoFar.trim()) {
-      this.messages.push({ role: "assistant", content: `${spokenSoFar.trim()} —` });
+    if (last?.role === "user") {
+      this.messages.push({ role: "assistant", content: `${said} —` });
+    } else if (last?.role === "assistant" && !hasToolUse(last)) {
+      // The full reply was generated but the caller only heard part of it.
+      last.content = `${said} —`;
     }
+  }
+
+  /** The reply was generated but never heard (the caller kept talking): forget it. */
+  dropUnheard() {
+    const last = this.messages.at(-1);
+    if (last?.role === "assistant" && !hasToolUse(last) && this.messages.length > 2) this.messages.pop();
+  }
+
+  /** Caller speech that will be answered together with what they say next. */
+  addCallerText(text: string) {
+    this.pushUser(text);
+  }
+
+  /** Something the agent said outside the reasoning loop (re-ask, check-in). */
+  noteAgentSaid(text: string) {
+    const last = this.messages.at(-1);
+    if (last?.role === "assistant" && typeof last.content === "string") last.content = `${last.content} ${text}`;
+    else if (last?.role === "assistant") (last.content as Anthropic.Beta.BetaContentBlockParam[]).push({ type: "text", text });
+    else this.messages.push({ role: "assistant", content: text });
+  }
+
+  /** A note about the call that the agent should know (e.g. a supervisor spoke). */
+  addContext(note: string) {
+    this.pushUser(`[${note}]`);
   }
 
   async *respond(callerText: string, signal?: AbortSignal): AsyncGenerator<BrainEvent> {
@@ -184,6 +228,9 @@ export class AgentBrain {
         { signal },
       );
       stream.on("text", (delta: string) => pending.push(...splitter.push(delta)));
+      // Aborts (caller kept talking) and errors surface through finalMessage().
+      stream.on("abort", () => {});
+      stream.on("error", () => {});
 
       // Yield sentences as they complete while the stream is still running.
       const done = stream.finalMessage();
@@ -244,10 +291,17 @@ export class AgentBrain {
     // Two caller turns in a row (e.g. after an interruption) are merged.
     if (last?.role === "user" && typeof last.content === "string") {
       last.content = `${last.content} ${text}`;
+    } else if (last?.role === "user") {
+      // After tool results: the caller spoke before the agent could answer.
+      (last.content as Anthropic.Beta.BetaContentBlockParam[]).push({ type: "text", text });
     } else {
       this.messages.push({ role: "user", content: text });
     }
   }
+}
+
+function hasToolUse(m: Anthropic.Beta.BetaMessageParam) {
+  return Array.isArray(m.content) && m.content.some((b) => b.type === "tool_use");
 }
 
 /** One-shot call summary + QA score after the call ends. */

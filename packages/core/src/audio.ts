@@ -171,7 +171,7 @@ export interface VadOptions {
 
 export type VadEvent =
   | { type: "begin"; preroll: Int16Array[] }
-  | { type: "audio"; pcm: Int16Array }
+  | { type: "audio"; pcm: Int16Array; voiced: boolean; speechMs: number; silenceMs: number }
   | { type: "speech_start" }
   | { type: "utterance"; pcm: Int16Array; durationMs: number }
   | { type: "noise" };
@@ -188,7 +188,7 @@ export class TurnDetector {
   private silenceMs = 0;
   private buffer: Int16Array[] = [];
   private preroll: Int16Array[] = [];
-  private readonly endSilenceMs: number;
+  private endSilenceMs: number;
   private readonly minSpeechMs: number;
   private readonly maxUtteranceMs: number;
 
@@ -200,6 +200,16 @@ export class TurnDetector {
 
   get isSpeaking() {
     return this.speaking && this.speechMs >= this.minSpeechMs;
+  }
+
+  /** Voiced audio in the current utterance so far (ms). */
+  get currentSpeechMs() {
+    return this.speaking ? this.speechMs : 0;
+  }
+
+  /** Adjust how long a pause must be to end the turn (e.g. longer after "and…"). */
+  setEndSilence(ms: number) {
+    this.endSilenceMs = ms;
   }
 
   push(frame: Int16Array): VadEvent[] {
@@ -225,15 +235,17 @@ export class TurnDetector {
     }
 
     this.buffer.push(frame);
-    events.push({ type: "audio", pcm: frame });
+    let started = false;
     if (voiced) {
       const wasConfirmed = this.speechMs >= this.minSpeechMs;
       this.speechMs += ms;
       this.silenceMs = 0;
-      if (!wasConfirmed && this.speechMs >= this.minSpeechMs) events.push({ type: "speech_start" });
+      started = !wasConfirmed && this.speechMs >= this.minSpeechMs;
     } else {
       this.silenceMs += ms;
     }
+    events.push({ type: "audio", pcm: frame, voiced, speechMs: this.speechMs, silenceMs: this.silenceMs });
+    if (started) events.push({ type: "speech_start" });
 
     const total = this.buffer.length * ms;
     if (this.silenceMs >= this.endSilenceMs || total >= this.maxUtteranceMs) {
