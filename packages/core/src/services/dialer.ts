@@ -15,6 +15,7 @@ import { requireTelephony, TelephonyError } from "../telephony";
 import { addEvent, createCall, finalizeCall, transition } from "./calls";
 import { isDnc } from "./leads";
 import { pickCallerNumber } from "./numbers";
+import { syncCampaignLeads } from "./campaigns";
 import { acquireLease } from "./system";
 
 export class DialError extends Error {}
@@ -112,7 +113,14 @@ export async function dialerTick(holder = env.workerId) {
   return { skipped: false, placed };
 }
 
+// Leads added to a running campaign's lists join its queue (checked about once a minute).
+const lastSync = new Map<string, number>();
+
 async function dialCampaign(orgId: string, campaignId: string): Promise<number> {
+  if (Date.now() - (lastSync.get(campaignId) ?? 0) > 60_000) {
+    lastSync.set(campaignId, Date.now());
+    await withTenant(orgId, (tx) => syncCampaignLeads(tx, orgId, campaignId));
+  }
   const plan = await withTenant(orgId, async (tx) => {
     const [c] = await tx<{
       agent_id: string | null;

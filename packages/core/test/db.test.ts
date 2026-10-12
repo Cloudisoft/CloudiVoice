@@ -10,7 +10,7 @@ import { migrate } from "../src/db/migrate";
 import { createEmailVerification, createPasswordReset, getSession, resetPassword, signIn, signUp, verifyEmail } from "../src/services/auth";
 import { addDnc, addLead, importLeads, listLeads, resetLeadsForRedial, bulkDnc } from "../src/services/leads";
 import { createCall, finalizeCall, transition, addTranscriptLine } from "../src/services/calls";
-import { saveCampaign } from "../src/services/campaigns";
+import { preflight, saveCampaign } from "../src/services/campaigns";
 import { createAgent } from "../src/services/agents";
 import { acquireLease } from "../src/services/system";
 
@@ -142,6 +142,24 @@ run("database", () => {
     expect(d).toMatchObject({ ok: true, dnc: true });
     // Same number in another organization is a separate lead.
     expect(await withTenant(orgB, (tx) => addLead(tx, orgB, userA, { phone: "9876543219" }))).toMatchObject({ ok: true });
+  });
+
+  it("picks up leads added to a campaign's list after it was saved", async () => {
+    await withTenant(orgB, async (tx) => {
+      const agentId = await createAgent(tx, orgB, userA, "Sales", { company_name: "Beta Realty" });
+      const base = { agent_id: agentId, number_ids: [], transfer_number: "", intro_name: "", voicemail_message: "", max_concurrency: 1, calls_per_minute: 5, max_attempts: 3, window_start: null, window_end: null };
+      const noList = await saveCampaign(tx, orgB, userA, { ...base, name: "No list", list_ids: [] });
+      expect((await preflight(tx, noList)).find((c) => c.key === "leads")).toMatchObject({ ok: false, detail: expect.stringMatching(/No lead list is selected/) });
+
+      const [list] = await tx<{ id: string }[]>`insert into lead_lists (org_id, name) values (${orgB}, 'Later') returning id`;
+      const campaignId = await saveCampaign(tx, orgB, userA, { ...base, name: "With list", list_ids: [list!.id] });
+      expect((await preflight(tx, campaignId)).find((c) => c.key === "leads")).toMatchObject({ ok: false, detail: expect.stringMatching(/list is empty/) });
+
+      // Lead added to the list after the campaign was saved (the reported case).
+      const r = await addLead(tx, orgB, userA, { phone: "9876511111", listId: list!.id });
+      expect(r.ok).toBe(true);
+      expect((await preflight(tx, campaignId)).find((c) => c.key === "leads")).toMatchObject({ ok: true, detail: "1 lead waiting." });
+    });
   });
 
   it("finalizes a never-connected call as No Answer and schedules a retry", async () => {

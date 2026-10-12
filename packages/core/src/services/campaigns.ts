@@ -84,13 +84,16 @@ export interface PreflightCheck {
 /** Everything that must be true before a campaign may start dialling. */
 export async function preflight(tx: Tx, campaignId: string): Promise<PreflightCheck[]> {
   const [c] = await tx<{
+    org_id: string;
     agent_id: string | null;
     number_ids: string[];
     transfer_number: string | null;
     window_start: string | null;
     window_end: string | null;
-  }[]>`select agent_id, number_ids, transfer_number, window_start, window_end from campaigns where id = ${campaignId}`;
+  }[]>`select org_id, agent_id, number_ids, transfer_number, window_start, window_end from campaigns where id = ${campaignId}`;
   if (!c) throw new Error("Campaign not found");
+  // Leads added to the campaign's lists since it was saved join the queue now.
+  await syncCampaignLeads(tx, c.org_id, campaignId);
   const [org] = await tx<{ timezone: string; calling_window_start: string; calling_window_end: string; calling_days: number[] }[]>`
     select timezone, calling_window_start, calling_window_end, calling_days from organizations`;
   const checks: PreflightCheck[] = [];
@@ -125,9 +128,27 @@ export async function preflight(tx: Tx, campaignId: string): Promise<PreflightCh
     blocking: false,
   });
 
-  const [{ due }] = (await tx<{ due: number }[]>`
-    select count(*)::int as due from campaign_leads where campaign_id = ${campaignId} and state in ('pending','retry_wait')`) as unknown as [{ due: number }];
-  checks.push({ key: "leads", label: "Leads to call", ok: due > 0, detail: due ? `${due.toLocaleString("en-IN")} leads waiting.` : "No leads waiting. Add a lead list or reset leads for redial.", blocking: true });
+  const [q] = await tx<{ lists: number; members: number; due: number; dnc: number }[]>`
+    select (select count(*)::int from campaign_lists where campaign_id = ${campaignId}) as lists,
+           (select count(distinct m.lead_id)::int from campaign_lists cl join lead_list_members m on m.list_id = cl.list_id where cl.campaign_id = ${campaignId}) as members,
+           (select count(*)::int from campaign_leads where campaign_id = ${campaignId} and state in ('pending','retry_wait')) as due,
+           (select count(*)::int from campaign_leads where campaign_id = ${campaignId} and state = 'skipped') as dnc`;
+  const { lists, members, due, dnc } = q!;
+  checks.push({
+    key: "leads",
+    label: "Leads to call",
+    ok: due > 0,
+    detail: due
+      ? `${due.toLocaleString("en-IN")} lead${due > 1 ? "s" : ""} waiting.`
+      : lists === 0
+        ? "No lead list is selected. Edit the campaign and tick the list(s) to call."
+        : members === 0
+          ? "The selected list is empty. Add leads to it (Leads → Add lead or Import), or choose another list."
+          : dnc === members
+            ? "Every lead in the selected lists is on the Do-Not-Call list."
+            : "Everyone in the selected lists has already been called. Reset leads for redial on the Lead Lists page, or add new leads.",
+    blocking: true,
+  });
 
   const window = isWithinCallingWindow(new Date(), {
     timezone: org!.timezone,
@@ -174,8 +195,8 @@ export async function setCampaignStatus(tx: Tx, orgId: string, userId: string, c
   if (next === "running") {
     const checks = await preflight(tx, campaignId);
     const failing = checks.filter((x) => x.blocking && !x.ok);
-    if (failing.length) throw new Error(`Preflight failed: ${failing.map((f) => f.label).join(", ")}.`);
-    await syncCampaignLeads(tx, orgId, campaignId);
+    // Explain what to fix, not just which check failed.
+    if (failing.length) throw new Error(`Can't start yet — ${failing.map((f) => `${f.label}: ${f.detail}`).join(" ")}`);
   }
   // Pausing/stopping only stops new calls; live calls finish naturally.
   await tx`update campaigns set status = ${next},

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { SubmitButton } from "@/components/ui/form";
 import { saveCampaignAction, type CampaignState } from "./actions";
@@ -68,12 +69,17 @@ export function CampaignForm({
               ))}
             </select>
           </div>
-          <fieldset className="field span-2" style={{ border: 0, padding: 0, margin: 0 }}>
+          <fieldset id="lists" className="field span-2" style={{ border: 0, padding: 0, margin: 0 }}>
             <legend className="field-label" style={{ marginBottom: 6 }}>
-              Lead lists
+              Lead lists <span className="req">*</span>
             </legend>
+            <span className="field-hint" style={{ marginBottom: 6 }}>
+              The campaign calls everyone in the ticked lists. Leads you add to these lists later join the queue automatically.
+            </span>
             {lists.length === 0 ? (
-              <span className="field-hint">No lists yet — import leads first.</span>
+              <span className="field-hint">
+                No lists yet — <Link className="link" href="/app/leads/new">add a lead</Link> or <Link className="link" href="/app/leads/import">import leads</Link> into a list first.
+              </span>
             ) : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 6 }}>
                 {lists.map((l) => (

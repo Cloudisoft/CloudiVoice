@@ -129,6 +129,7 @@ export function AddLeadForm({ lists, languages, defaultList }: Props) {
           ))}
           <option value="__new">+ New list…</option>
         </select>
+        <span className="field-hint">Campaigns call leads by list — pick one to include this lead in a campaign.</span>
       </div>
       {listChoice === "__new" ? (
         <div className="field">

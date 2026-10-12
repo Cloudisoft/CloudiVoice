@@ -13,6 +13,13 @@ import { CampaignForm } from "../CampaignForm";
 
 const STATE_LABEL: Record<string, string> = { pending: "Waiting", in_progress: "In progress", retry_wait: "Retry waiting", completed: "Completed", exhausted: "Max attempts", skipped: "Skipped (DNC)" };
 
+/** Where to go to fix a failing preflight check. */
+const FIX: Record<string, { label: string; href: (id: string) => string }> = {
+  agent: { label: "Agents", href: () => "/app/agents" },
+  numbers: { label: "Choose numbers", href: (id) => `/app/campaigns/${id}?tab=settings` },
+  leads: { label: "Choose lists", href: (id) => `/app/campaigns/${id}?tab=settings#lists` },
+};
+
 export default async function CampaignPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
   const { id } = await params;
   const sp = await searchParams;
@@ -199,7 +206,13 @@ export default async function CampaignPage({ params, searchParams }: { params: P
                           <b>{c.label}</b>
                           <span className="d">{c.detail}</span>
                         </span>
-                        <span />
+                        {!c.ok && c.blocking && FIX[c.key] && canEdit ? (
+                          <Link className="btn btn-ghost btn-sm" href={FIX[c.key]!.href(id)}>
+                            {FIX[c.key]!.label}
+                          </Link>
+                        ) : (
+                          <span />
+                        )}
                       </li>
                     ))}
                   </ul>
