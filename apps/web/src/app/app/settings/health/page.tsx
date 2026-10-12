@@ -2,6 +2,7 @@ import { failedWebhooks, systemHealth } from "@cloudivoice/core/services/system"
 import { fmtDate } from "@/components/ui/kit";
 import { isPlatformAdmin } from "@/lib/platform";
 import { tenant } from "@/lib/session";
+import { PendingButton } from "@/components/ui/form";
 import { replayWebhookAction } from "../actions";
 
 export const metadata = { title: "System health" };
@@ -76,7 +77,7 @@ export default async function HealthPage() {
                       <td className="num">
                         <form action={replayWebhookAction}>
                           <input type="hidden" name="id" value={w.id} />
-                          <button className="btn btn-quiet btn-sm">Replay</button>
+                          <PendingButton className="btn btn-quiet btn-sm">Replay</PendingButton>
                         </form>
                       </td>
                     </tr>

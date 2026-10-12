@@ -9,6 +9,7 @@ import { ConfirmButton } from "@/components/ui/ConfirmButton";
 import { fmtDate, PageHeader } from "@/components/ui/kit";
 import { agentOptions } from "@/lib/options";
 import { hasPermission, tenant } from "@/lib/session";
+import { PendingButton } from "@/components/ui/form";
 import { deleteAgentAction, rollbackAction, setStatusAction } from "../actions";
 
 export default async function AgentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ created?: string }> }) {
@@ -87,7 +88,7 @@ export default async function AgentPage({ params, searchParams }: { params: Prom
                     <form action={rollbackAction}>
                       <input type="hidden" name="id" value={agent.id} />
                       <input type="hidden" name="version" value={v.version} />
-                      <button className="btn btn-quiet btn-sm">Restore</button>
+                      <PendingButton className="btn btn-quiet btn-sm">Restore</PendingButton>
                     </form>
                   ) : (
                     <span className="field-hint">{v.version === agent.current_version ? "Current" : ""}</span>

@@ -4,6 +4,7 @@ import { telephony } from "@cloudivoice/core/telephony";
 import { EmptyState, PageHeader } from "@/components/ui/kit";
 import { hasPermission, tenant } from "@/lib/session";
 import { updateNumberAction } from "./actions";
+import { PendingButton } from "@/components/ui/form";
 import { ImportNumbers, SearchNumbers } from "./NumberTools";
 
 export const metadata = { title: "Phone Numbers" };
@@ -89,7 +90,7 @@ export default async function NumbersPage() {
                               <div className="field-hint">{n.calls_7d} calls</div>
                             </div>
                             <div style={{ padding: "11px 14px", fontSize: 13 }}>{n.campaigns?.join(", ") ?? <span className="muted">—</span>}</div>
-                            <div style={{ padding: "11px 14px" }}>{canManage && <button className="btn btn-quiet btn-sm">Save</button>}</div>
+                            <div style={{ padding: "11px 14px" }}>{canManage && <PendingButton className="btn btn-quiet btn-sm">Save</PendingButton>}</div>
                           </form>
                         </td>
                       </tr>

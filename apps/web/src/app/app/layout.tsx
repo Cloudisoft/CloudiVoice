@@ -11,21 +11,19 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireOrgUser();
-  const [orgs, liveCount, onboarding] = await Promise.all([
+  // One round trip for everything the shell needs (alongside the org list).
+  const [orgs, shell] = await Promise.all([
     userOrgs(user.userId),
     withTenant(user.orgId, async (tx) => {
-      const [r] = await tx<{ n: number }[]>`select count(*)::int as n from calls where state in ('ringing','answered','in_progress','transferring') and created_at > now() - interval '3 hours'`;
-      return r?.n ?? 0;
-    }),
-    withTenant(user.orgId, async (tx) => {
-      const [o] = await tx<{ onboarding_completed_at: Date | null }[]>`select onboarding_completed_at from organizations`;
-      return o?.onboarding_completed_at ?? null;
+      const [r] = await tx<{ live: number; onboarded: boolean; has_agent: boolean }[]>`
+        select (select count(*)::int from calls where state in ('ringing','answered','in_progress','transferring') and created_at > now() - interval '3 hours') as live,
+               (select onboarding_completed_at is not null from organizations limit 1) as onboarded,
+               exists (select 1 from agents) as has_agent`;
+      return r!;
     }),
   ]);
-  if (!onboarding && user.role === "admin") {
-    const agents = await withTenant(user.orgId, (tx) => tx`select 1 from agents limit 1`);
-    if (agents.length === 0) redirect("/onboarding");
-  }
+  const liveCount = shell.live;
+  if (!shell.onboarded && user.role === "admin" && !shell.has_agent) redirect("/onboarding");
 
   const items: NavItem[] = [
     { href: "/app", label: "Overview", icon: "home", group: "main" },

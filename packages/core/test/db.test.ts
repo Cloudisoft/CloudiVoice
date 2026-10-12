@@ -46,6 +46,15 @@ run("database", () => {
     await expect(signIn("asha@example.com", "nope")).rejects.toThrow(/don't match/);
   });
 
+  it("scopes the very first query of a tenant transaction", async () => {
+    const [r] = await withTenant(orgA, (tx) => tx<{ role: string; org: string }[]>`select current_user as role, current_setting('app.org_id') as org`);
+    expect(r).toEqual({ role: "cloudivoice_app", org: orgA });
+    // Concurrent queries inside the same transaction are scoped too.
+    const both = await withTenant(orgB, (tx) => Promise.all([tx`select current_user as role`, tx`select current_setting('app.org_id') as org`]));
+    expect(both[0][0]!.role).toBe("cloudivoice_app");
+    expect(both[1][0]!.org).toBe(orgB);
+  });
+
   it("denies cross-tenant reads and writes (row-level security)", async () => {
     await withTenant(orgA, (tx) => tx`insert into leads (org_id, phone_e164, phone_digits, first_name) values (${orgA}, '+919800000001', '9800000001', 'Secret')`);
     const seenByB = await withTenant(orgB, (tx) => tx`select * from leads`);

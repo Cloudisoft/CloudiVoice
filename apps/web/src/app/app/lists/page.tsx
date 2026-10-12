@@ -6,6 +6,7 @@ import { EmptyState, fmtDate, PageHeader } from "@/components/ui/kit";
 import { hasPermission, tenant } from "@/lib/session";
 import { addDncAction } from "../leads/actions";
 import { createListAction, deleteListAction, removeDncAction } from "./actions";
+import { PendingButton } from "@/components/ui/form";
 import { ResetForm } from "./ResetForm";
 
 export const metadata = { title: "Lead Lists" };
@@ -28,7 +29,7 @@ export default async function ListsPage() {
               {canEdit && (
                 <form action={createListAction} style={{ display: "flex", gap: 6 }}>
                   <input name="name" className="input" placeholder="New list name" aria-label="New list name" style={{ minHeight: 34, height: 34, width: 200 }} required />
-                  <button className="btn btn-ghost btn-sm">Create</button>
+                  <PendingButton className="btn btn-ghost btn-sm">Create</PendingButton>
                 </form>
               )}
             </div>
@@ -86,7 +87,7 @@ export default async function ListsPage() {
               <form action={addDncAction} className="filters">
                 <input name="phone" className="input" placeholder="Phone number" aria-label="Phone number" inputMode="tel" required />
                 <input name="reason" className="input" placeholder="Reason (optional)" aria-label="Reason" />
-                <button className="btn btn-ghost btn-sm">Add to DNC</button>
+                <PendingButton className="btn btn-ghost btn-sm">Add to DNC</PendingButton>
               </form>
             )}
             {dnc.length === 0 ? (

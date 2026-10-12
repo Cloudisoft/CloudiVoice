@@ -828,3 +828,67 @@
 .monitor-meter .bar-supervisor {
   background: var(--ok);
 }
+
+/* Instant navigation skeleton */
+.skel {
+  border-radius: var(--radius, 10px);
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface-3) 40%, var(--surface-2) 80%);
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.2s ease-in-out infinite;
+}
+.skel-page {
+  display: grid;
+  gap: 14px;
+  animation: skel-in 120ms ease-out both;
+}
+.skel-title {
+  height: 30px;
+  width: min(320px, 70%);
+}
+.skel-sub {
+  height: 14px;
+  width: min(520px, 90%);
+  margin-bottom: 8px;
+}
+.skel-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.skel-stat {
+  height: 84px;
+}
+.skel-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 14px;
+}
+.skel-panel {
+  height: 340px;
+}
+@media (max-width: 860px) {
+  .skel-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .skel-grid {
+    grid-template-columns: 1fr;
+  }
+  .skel-panel-side {
+    display: none;
+  }
+}
+@keyframes skel-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes skel-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: none;
+  }
+}

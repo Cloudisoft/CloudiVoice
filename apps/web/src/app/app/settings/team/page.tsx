@@ -3,6 +3,7 @@ import { ConfirmButton } from "@/components/ui/ConfirmButton";
 import { fmtDate } from "@/components/ui/kit";
 import { hasPermission, tenant } from "@/lib/session";
 import { changeRoleAction, removeMemberAction, revokeInviteAction } from "../actions";
+import { PendingButton } from "@/components/ui/form";
 import { InviteForm } from "./InviteForm";
 
 export const metadata = { title: "Team & roles" };
@@ -47,7 +48,7 @@ export default async function TeamPage() {
                               </option>
                             ))}
                           </select>
-                          <button className="btn btn-quiet btn-sm">Save</button>
+                          <PendingButton className="btn btn-quiet btn-sm">Save</PendingButton>
                         </form>
                       ) : (
                         <span style={{ textTransform: "capitalize" }}>{m.role}</span>
@@ -87,7 +88,7 @@ export default async function TeamPage() {
                         {canManage && (
                           <form action={revokeInviteAction}>
                             <input type="hidden" name="id" value={i.id} />
-                            <button className="btn btn-quiet btn-sm">Revoke</button>
+                            <PendingButton className="btn btn-quiet btn-sm">Revoke</PendingButton>
                           </form>
                         )}
                       </td>

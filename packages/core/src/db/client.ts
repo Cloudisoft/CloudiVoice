@@ -35,9 +35,14 @@ export const APP_ROLE = "cloudivoice_app";
 export async function withTenant<T>(orgId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
   if (!/^[0-9a-f-]{36}$/i.test(orgId)) throw new Error("Invalid organization id");
   return db().begin(async (tx) => {
-    await tx.unsafe(`set local role ${APP_ROLE}`);
-    await tx`select set_config('app.org_id', ${orgId}, true)`;
-    return fn(tx);
+    // One statement (same as SET LOCAL ROLE + app.org_id), pipelined with the
+    // caller's queries: they run after it on this connection, in order, and a
+    // failure aborts the transaction, so nothing runs outside the tenant scope.
+    const scope = tx`select set_config('role', ${APP_ROLE}, true), set_config('app.org_id', ${orgId}, true)`;
+    scope.catch(() => {});
+    const out = await fn(tx);
+    await scope;
+    return out;
   }) as Promise<T>;
 }
 

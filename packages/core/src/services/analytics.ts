@@ -3,7 +3,7 @@ import type { Tx } from "../db/client";
 /** Dashboard overview — one grouped query per widget. */
 export async function overview(tx: Tx, days = 7) {
   const since = tx`now() - ${`${days} days`}::interval`;
-  const [totals] = await tx<{
+  const totalsQ = tx<{
     calls: number;
     connected: number;
     transferred: number;
@@ -20,9 +20,9 @@ export async function overview(tx: Tx, days = 7) {
       sum(cost_paise)::text as cost_paise,
       count(*) filter (where created_at >= date_trunc('day', now() at time zone 'Asia/Kolkata') at time zone 'Asia/Kolkata')::int as today
     from calls where created_at > ${since}`;
-  const outcomes = await tx<{ outcome: string; n: number }[]>`
+  const outcomesQ = tx<{ outcome: string; n: number }[]>`
     select coalesce(outcome, 'in_progress') as outcome, count(*)::int as n from calls where created_at > ${since} group by 1 order by 2 desc`;
-  const daily = await tx<{ day: string; calls: number; connected: number }[]>`
+  const dailyQ = tx<{ day: string; calls: number; connected: number }[]>`
     select to_char(d.day, 'YYYY-MM-DD') as day,
       coalesce(count(c.id), 0)::int as calls,
       coalesce(count(c.id) filter (where c.answered_at is not null), 0)::int as connected
@@ -30,14 +30,16 @@ export async function overview(tx: Tx, days = 7) {
                          date_trunc('day', now() at time zone 'Asia/Kolkata'), interval '1 day') as d(day)
     left join calls c on date_trunc('day', c.created_at at time zone 'Asia/Kolkata') = d.day
     group by d.day order by d.day`;
-  const recent = await tx<{ id: string; to_e164: string | null; from_e164: string | null; direction: string; outcome: string | null; state: string; created_at: Date; lead_name: string | null; duration_sec: number | null }[]>`
+  const recentQ = tx<{ id: string; to_e164: string | null; from_e164: string | null; direction: string; outcome: string | null; state: string; created_at: Date; lead_name: string | null; duration_sec: number | null }[]>`
     select c.id, c.to_e164, c.from_e164, c.direction, c.outcome, c.state, c.created_at, c.duration_sec,
       nullif(trim(coalesce(l.first_name,'') || ' ' || coalesce(l.last_name,'')), '') as lead_name
     from calls c left join leads l on l.id = c.lead_id order by c.created_at desc limit 8`;
-  const [balance] = await tx<{ spent: string; credits: string }[]>`
+  const balanceQ = tx<{ spent: string; credits: string }[]>`
     select coalesce(sum(amount_paise) filter (where amount_paise > 0), 0)::text as spent,
            coalesce(-sum(amount_paise) filter (where amount_paise < 0), 0)::text as credits
     from usage_ledger`;
+  // Sent together on the transaction's connection: one round trip, not five.
+  const [[totals], outcomes, daily, recent, [balance]] = await Promise.all([totalsQ, outcomesQ, dailyQ, recentQ, balanceQ]);
   return { totals: totals!, outcomes, daily, recent, balance: balance! };
 }
 

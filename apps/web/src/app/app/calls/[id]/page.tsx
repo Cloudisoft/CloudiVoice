@@ -8,6 +8,7 @@ import { getCallDetail } from "@cloudivoice/core/services/calls";
 import { AutoRefresh } from "@/components/ui/AutoRefresh";
 import { fmtDate, fmtDuration, OutcomeChip, PageHeader, StateChip } from "@/components/ui/kit";
 import { hasPermission, tenant } from "@/lib/session";
+import { PendingButton } from "@/components/ui/form";
 import { overrideOutcomeAction } from "../actions";
 
 const EVENT_TEXT: Record<string, (p: Record<string, unknown>) => string> = {
@@ -163,7 +164,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
                     </select>
                   </div>
                   <input name="note" className="input" placeholder="Reason (optional)" aria-label="Reason" />
-                  <button className="btn btn-ghost btn-sm">Save override</button>
+                  <PendingButton className="btn btn-ghost btn-sm">Save override</PendingButton>
                   <span className="field-hint">Supervisor overrides are never replaced by automatic outcomes.</span>
                 </form>
               )}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { superviseAction } from "./actions";
+import { PendingButton } from "@/components/ui/form";
 import { useCallMonitor } from "./useCallMonitor";
 
 interface LiveCall {
@@ -244,14 +245,14 @@ export function LiveMonitor({ canSupervise, canTransfer }: { canSupervise: boole
                   {canTransfer && (
                     <>
                       <input name="to" className="input" placeholder="Transfer to number" inputMode="tel" aria-label="Transfer to number" style={{ maxWidth: 200, minHeight: 34, height: 34 }} />
-                      <button className="btn btn-ghost btn-sm" name="op" value="transfer">
+                      <PendingButton className="btn btn-ghost btn-sm" name="op" value="transfer">
                         Transfer
-                      </button>
+                      </PendingButton>
                     </>
                   )}
-                  <button className="btn btn-danger btn-sm" name="op" value="end" onClick={(e) => !confirm("End this call now?") && e.preventDefault()}>
+                  <PendingButton className="btn btn-danger btn-sm" name="op" value="end" onClick={(e) => !confirm("End this call now?") && e.preventDefault()}>
                     End call
-                  </button>
+                  </PendingButton>
                 </form>
               )}
             </>

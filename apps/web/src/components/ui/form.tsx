@@ -2,6 +2,21 @@
 
 import { useFormStatus } from "react-dom";
 
+/**
+ * A submit button that reacts the moment it's clicked: it disables itself
+ * and shows a spinner until the server action finishes. Buttons sharing a
+ * form only spin when they were the one pressed (matched by name/value).
+ */
+export function PendingButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const { pending, data } = useFormStatus();
+  const mine = pending && (!props.name || data?.get(props.name) === String(props.value ?? ""));
+  return (
+    <button {...props} disabled={props.disabled || pending} aria-busy={mine || undefined}>
+      {children}
+    </button>
+  );
+}
+
 export function SubmitButton({ children, className = "btn btn-accent", pendingText }: { children: React.ReactNode; className?: string; pendingText?: string }) {
   const { pending } = useFormStatus();
   return (

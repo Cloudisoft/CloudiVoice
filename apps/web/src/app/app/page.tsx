@@ -13,14 +13,16 @@ export const metadata = { title: "Overview" };
 export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ denied?: string }> }) {
   const sp = await searchParams;
   const { data, setup, user } = await tenant(async (tx, user) => {
-    const data = await overview(tx, 7);
-    const [s] = await tx<{ agents: number; active_agents: number; numbers: number; leads: number; campaigns: number; calls: number }[]>`
+    const [data, [s]] = await Promise.all([
+      overview(tx, 7),
+      tx<{ agents: number; active_agents: number; numbers: number; leads: number; campaigns: number; calls: number }[]>`
       select (select count(*)::int from agents) as agents,
              (select count(*)::int from agents where status = 'active') as active_agents,
              (select count(*)::int from phone_numbers where status = 'active') as numbers,
              (select count(*)::int from leads) as leads,
              (select count(*)::int from campaigns) as campaigns,
-             (select count(*)::int from calls) as calls`;
+             (select count(*)::int from calls) as calls`,
+    ]);
     return { data, setup: s!, user };
   });
   const stack = liveStackStatus();

@@ -4,6 +4,7 @@ import { listCallbacks } from "@cloudivoice/core/services/callbacks";
 import { ConfirmButton } from "@/components/ui/ConfirmButton";
 import { EmptyState, fmtDate, PageHeader } from "@/components/ui/kit";
 import { hasPermission, tenant } from "@/lib/session";
+import { PendingButton } from "@/components/ui/form";
 import { cancelCallbackAction, newCallbackAction, rescheduleCallbackAction } from "./actions";
 
 export const metadata = { title: "Callbacks" };
@@ -32,7 +33,7 @@ export default async function CallbacksPage({ searchParams }: { searchParams: Pr
             <label htmlFor="cb-reason">Note</label>
             <input id="cb-reason" name="reason" className="input" />
           </div>
-          <button className="btn btn-accent btn-sm">Schedule callback</button>
+          <PendingButton className="btn btn-accent btn-sm">Schedule callback</PendingButton>
         </form>
       )}
       <section className="panel">
@@ -82,7 +83,7 @@ export default async function CallbacksPage({ searchParams }: { searchParams: Pr
                           <form action={rescheduleCallbackAction} style={{ display: "flex", gap: 6 }}>
                             <input type="hidden" name="id" value={r.id} />
                             <input type="datetime-local" name="when" className="input" required aria-label="New time" style={{ minHeight: 32, height: 32, width: 200 }} />
-                            <button className="btn btn-quiet btn-sm">Move</button>
+                            <PendingButton className="btn btn-quiet btn-sm">Move</PendingButton>
                           </form>
                           {r.status === "scheduled" && (
                             <form action={cancelCallbackAction}>

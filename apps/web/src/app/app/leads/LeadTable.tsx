@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { PendingButton } from "@/components/ui/form";
 import { bulkAction } from "./actions";
 
 interface Row {
@@ -69,16 +70,16 @@ export function LeadTable({
               </option>
             ))}
           </select>
-          <button className="btn btn-ghost btn-sm" name="op" value="list">
+          <PendingButton className="btn btn-ghost btn-sm" name="op" value="list">
             Add
-          </button>
-          <button className="btn btn-ghost btn-sm" name="op" value="dnc" onClick={(e) => !confirm(`Mark ${count} lead(s) as Do Not Call?`) && e.preventDefault()}>
+          </PendingButton>
+          <PendingButton className="btn btn-ghost btn-sm" name="op" value="dnc" onClick={(e) => !confirm(`Mark ${count} lead(s) as Do Not Call?`) && e.preventDefault()}>
             Mark DNC
-          </button>
+          </PendingButton>
           {canDelete && (
-            <button className="btn btn-danger btn-sm" name="op" value="delete" onClick={(e) => !confirm(`Delete ${count} lead(s)? This cannot be undone.`) && e.preventDefault()}>
+            <PendingButton className="btn btn-danger btn-sm" name="op" value="delete" onClick={(e) => !confirm(`Delete ${count} lead(s)? This cannot be undone.`) && e.preventDefault()}>
               Delete
-            </button>
+            </PendingButton>
           )}
         </div>
       )}
