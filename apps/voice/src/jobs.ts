@@ -1,12 +1,9 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { join } from "node:path";
 import { db, withTenant } from "@cloudivoice/core/db/client";
-import { env } from "@cloudivoice/core/env";
 import { addEvent } from "@cloudivoice/core/services/calls";
+import { putObject, removeObjects } from "@cloudivoice/core/storage";
 import { telephony } from "@cloudivoice/core/telephony";
 import { log } from "./log";
-
-const root = () => resolve(env.storageDir);
 
 /**
  * Copy finished recordings into private storage as MP3. Retries failed
@@ -26,9 +23,7 @@ export async function backfillRecordings() {
     try {
       const bytes = await adapter.downloadRecording(r.url);
       const key = join("recordings", r.org_id, `${r.id}.mp3`);
-      const path = join(root(), key);
-      await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, bytes);
+      await putObject(key, bytes, "audio/mpeg");
       await withTenant(r.org_id, async (tx) => {
         await tx`update calls set recording_key = ${key}, recording_status = 'stored' where id = ${r.id}`;
         await addEvent(tx, r.org_id, r.id, "recording_stored", { bytes: bytes.length });
@@ -49,9 +44,7 @@ export async function enforceRetention() {
         select id, recording_key from calls where created_at < now() - ${`${org.retention_days} days`}::interval
           and (recording_key is not null or exists (select 1 from transcript_lines t where t.call_id = calls.id))
         limit 1000`;
-      for (const c of old) {
-        if (c.recording_key) await rm(join(root(), c.recording_key), { force: true });
-      }
+      await removeObjects(old.flatMap((c) => (c.recording_key ? [c.recording_key] : [])));
       if (old.length) {
         const ids = old.map((c) => c.id);
         await tx`delete from transcript_lines where call_id in ${tx(ids)}`;

@@ -108,6 +108,17 @@ export const env = {
   get storageDir() {
     return read("STORAGE_DIR") ?? "./storage";
   },
+  /** Supabase project URL; with the service key, recordings go to Supabase Storage. */
+  get supabaseUrl() {
+    return read("SUPABASE_URL")?.replace(/\/$/, "");
+  },
+  /** Server-only key. Never sent to a browser. */
+  get supabaseServiceKey() {
+    return read("SUPABASE_SERVICE_ROLE_KEY");
+  },
+  get storageBucket() {
+    return read("STORAGE_BUCKET") ?? "cloudivoice";
+  },
 
   // ---- Workers ----
   get workerId() {
