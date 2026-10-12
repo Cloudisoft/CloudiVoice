@@ -9,7 +9,7 @@ import { replayWebhook } from "@cloudivoice/core/services/telephonyEvents";
 import { checkSpeechHealth } from "@cloudivoice/core/speech";
 import { telephony, TelephonyError } from "@cloudivoice/core/telephony";
 import { withTenant } from "@cloudivoice/core/db/client";
-import { sendMail } from "@/lib/mail";
+import { sendActionEmail } from "@/lib/mail";
 import { clearSessionCookie, requireOrgUser, requirePermission, tenant } from "@/lib/session";
 import { isPlatformAdmin } from "@/lib/platform";
 import { redirect } from "next/navigation";
@@ -57,7 +57,13 @@ export async function inviteAction(_: SettingsState, form: FormData): Promise<Se
   try {
     const token = await createInvitation(user.orgId, user.userId, email, role);
     const link = `${env.appUrl}/invite/${token}`;
-    const r = await sendMail(email, `${user.name} invited you to ${user.orgName} on CloudiVoice`, `${user.name} has invited you to join ${user.orgName} as ${role}. This link expires in 7 days.`, link);
+    const r = await sendActionEmail(email, `${user.name} invited you to ${user.orgName} on CloudiVoice`, {
+      greeting: "Hello,",
+      lines: [`${user.name} has invited you to join ${user.orgName} on CloudiVoice as ${role}.`],
+      cta: "Accept invitation",
+      link,
+      footnote: "This invitation expires in 7 days.",
+    });
     revalidatePath("/app/settings/team");
     return { ok: r.sent ? `Invitation sent to ${email}.` : `Invitation created for ${email}.`, devLink: r.devLink };
   } catch (e) {

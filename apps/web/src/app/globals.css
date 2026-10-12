@@ -340,6 +340,7 @@ textarea {
   min-width: 0;
 }
 .field > label,
+.field > .row-between > label,
 .field-label {
   font-size: 13.5px;
   font-weight: 500;

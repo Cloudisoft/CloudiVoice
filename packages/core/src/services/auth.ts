@@ -36,7 +36,14 @@ export function can(role: Role, permission: Permission): boolean {
   return (PERMISSIONS[permission] as readonly Role[]).includes(role);
 }
 
-export class AuthError extends Error {}
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    readonly code?: "unverified",
+  ) {
+    super(message);
+  }
+}
 
 export const SESSION_DAYS = 30;
 
@@ -80,14 +87,23 @@ async function createSessionTx(tx: Tx, userId: string, orgId: string | null, met
 }
 
 /** Sign up creates the user, their organization (as admin) and a session. */
-export async function signUp(input: z.infer<typeof signupSchema>, meta: { ip?: string; userAgent?: string } = {}) {
+/**
+ * Create an account and its organization. Unless `verified`, no session is
+ * created: the person confirms their email first (see verifyEmail).
+ */
+export async function signUp(
+  input: z.infer<typeof signupSchema>,
+  meta: { ip?: string; userAgent?: string } = {},
+  opts: { verified?: boolean } = { verified: true },
+) {
   const data = signupSchema.parse(input);
   const passwordHash = await hashPassword(data.password);
   return withSystem(async (tx) => {
     const [exists] = await tx`select 1 from users where lower(email) = ${data.email}`;
     if (exists) throw new AuthError("An account with this email already exists. Try signing in.");
     const [user] = await tx<{ id: string }[]>`
-      insert into users (email, name, password_hash) values (${data.email}, ${data.name}, ${passwordHash}) returning id`;
+      insert into users (email, name, password_hash, email_verified_at)
+      values (${data.email}, ${data.name}, ${passwordHash}, ${opts.verified ? tx`now()` : null}) returning id`;
     const [org] = await tx<{ id: string }[]>`
       insert into organizations (name, slug) values (${data.company}, ${slugify(data.company)}) returning id`;
     await tx`insert into memberships (org_id, user_id, role) values (${org!.id}, ${user!.id}, 'admin')`;
@@ -95,18 +111,19 @@ export async function signUp(input: z.infer<typeof signupSchema>, meta: { ip?: s
              values (${org!.id}, 'credit', 1, 'grant', ${-pricing().welcomeCredits}, 'Welcome credits')`;
     await tx`insert into audit_logs (org_id, actor_user_id, action, entity_type, entity_id)
              values (${org!.id}, ${user!.id}, 'org.created', 'organization', ${org!.id})`;
-    const token = await createSessionTx(tx, user!.id, org!.id, meta);
-    return { token, userId: user!.id, orgId: org!.id };
+    const token = opts.verified ? await createSessionTx(tx, user!.id, org!.id, meta) : null;
+    return { token, userId: user!.id, orgId: org!.id, email: data.email, name: data.name };
   });
 }
 
 export async function signIn(email: string, password: string, meta: { ip?: string; userAgent?: string } = {}) {
   const normalized = email.trim().toLowerCase();
-  const [user] = await db()<{ id: string; password_hash: string }[]>`
-    select id, password_hash from users where lower(email) = ${normalized}`;
+  const [user] = await db()<{ id: string; password_hash: string; email_verified_at: Date | null }[]>`
+    select id, password_hash, email_verified_at from users where lower(email) = ${normalized}`;
   // Always run a hash comparison to keep timing uniform.
   const ok = await verifyPassword(password, user?.password_hash ?? "scrypt$32768$AAAAAAAAAAAAAAAAAAAAAA==$AAAA");
   if (!user || !ok) throw new AuthError("That email and password don't match.");
+  if (!user.email_verified_at) throw new AuthError("Please confirm your email first — check your inbox for the link we sent.", "unverified");
   return withSystem(async (tx) => {
     const [m] = await tx<{ org_id: string }[]>`
       select org_id from memberships where user_id = ${user.id} order by created_at asc limit 1`;
@@ -195,8 +212,43 @@ export async function resetPassword(token: string, newPassword: string) {
       where token_hash = ${sha256(token)} and used_at is null and expires_at > now()
       returning user_id`;
     if (!r) throw new AuthError("This reset link is invalid or has expired. Request a new one.");
-    await tx`update users set password_hash = ${hash} where id = ${r.user_id}`;
+    // Following a link sent to the inbox also proves the address.
+    await tx`update users set password_hash = ${hash}, email_verified_at = coalesce(email_verified_at, now()) where id = ${r.user_id}`;
     await tx`delete from sessions where user_id = ${r.user_id}`;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Email verification
+// ---------------------------------------------------------------------------
+const VERIFY_HOURS = 48;
+
+/** A fresh confirmation link token for an unverified account (null if none / already verified). */
+export async function createEmailVerification(email: string): Promise<{ token: string; name: string; email: string } | null> {
+  const [user] = await db()<{ id: string; name: string; email: string }[]>`
+    select id, name, email from users where lower(email) = ${email.trim().toLowerCase()} and email_verified_at is null`;
+  if (!user) return null;
+  const token = randomToken(32);
+  await db()`insert into email_verifications (token_hash, user_id, expires_at)
+             values (${sha256(token)}, ${user.id}, now() + ${`${VERIFY_HOURS} hours`}::interval)`;
+  return { token, name: user.name, email: user.email };
+}
+
+/**
+ * Confirm an email address and sign the person in. The link keeps working
+ * until it expires, so a mail scanner opening it first doesn't break it.
+ */
+export async function verifyEmail(token: string, meta: { ip?: string; userAgent?: string } = {}) {
+  if (!token || token.length < 20) throw new AuthError("This confirmation link is invalid.");
+  return withSystem(async (tx) => {
+    const [r] = await tx<{ user_id: string }[]>`
+      update email_verifications set used_at = coalesce(used_at, now())
+      where token_hash = ${sha256(token)} and expires_at > now()
+      returning user_id`;
+    if (!r) throw new AuthError("This confirmation link is invalid or has expired. Sign in to get a new one.");
+    await tx`update users set email_verified_at = coalesce(email_verified_at, now()), last_login_at = now() where id = ${r.user_id}`;
+    const [m] = await tx<{ org_id: string }[]>`select org_id from memberships where user_id = ${r.user_id} order by created_at asc limit 1`;
+    return { token: await createSessionTx(tx, r.user_id, m?.org_id ?? null, meta), userId: r.user_id };
   });
 }
 
@@ -241,12 +293,13 @@ export async function acceptInvitation(
       const name = z.string().trim().min(2).max(80).parse(input.name ?? "");
       const pw = signupSchema.shape.password.parse(input.password);
       [user] = await tx<{ id: string; password_hash: string }[]>`
-        insert into users (email, name, password_hash) values (${inv.email}, ${name}, ${await hashPassword(pw)})
+        insert into users (email, name, password_hash, email_verified_at) values (${inv.email}, ${name}, ${await hashPassword(pw)}, now())
         returning id, password_hash`;
     }
     await tx`insert into memberships (org_id, user_id, role) values (${inv.org_id}, ${user!.id}, ${inv.role})
              on conflict (org_id, user_id) do update set role = excluded.role`;
     await tx`update invitations set accepted_at = now() where id = ${inv.id}`;
+    await tx`update users set email_verified_at = coalesce(email_verified_at, now()) where id = ${user!.id}`;
     await tx`insert into audit_logs (org_id, actor_user_id, action, entity_type, details)
              values (${inv.org_id}, ${user!.id}, 'team.joined', 'membership', ${tx.json({ role: inv.role })})`;
     return { token: await createSessionTx(tx, user!.id, inv.org_id, meta) };

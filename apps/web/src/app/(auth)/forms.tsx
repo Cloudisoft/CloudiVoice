@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { Field, FormMessage, SubmitButton } from "@/components/ui/form";
-import { acceptInviteAction, forgotAction, type FormState, loginAction, resetAction, signupAction } from "./actions";
+import { acceptInviteAction, confirmEmailAction, forgotAction, type FormState, loginAction, resendVerificationAction, resetAction, signupAction } from "./actions";
 
 const initial: FormState = {};
 
@@ -58,6 +58,75 @@ export function LoginForm({ next, notice }: { next?: string; notice?: string }) 
       </div>
       <input type="hidden" name="next" value={next ?? ""} />
       <SubmitButton pendingText="Signing in…">Sign in</SubmitButton>
+      {state.unverified && state.values?.email && <ResendVerification email={state.values.email} compact />}
+    </form>
+  );
+}
+
+function DevLink({ link, what }: { link?: string; what: string }) {
+  if (!link) return null;
+  return (
+    <div className="notice notice-warn">
+      <span>
+        Development mode (no email server configured):{" "}
+        <a className="link" href={link}>
+          {what}
+        </a>
+      </span>
+    </div>
+  );
+}
+
+/** Resend the confirmation email. Rendered as its own form (never nested). */
+export function ResendVerification({ email, compact }: { email: string; compact?: boolean }) {
+  const [state, action] = useActionState(resendVerificationAction, initial);
+  // Inside the sign-in form a <form> can't be nested: the button submits that
+  // form (its email field included) to the resend action instead.
+  return compact ? (
+    <div className="stack" style={{ gap: 8 }}>
+      <FormMessage error={state.error} ok={state.ok} />
+      <DevLink link={state.devLink} what="open the confirmation link" />
+      <button type="submit" formAction={action} formNoValidate className="btn btn-ghost">
+        Resend confirmation email
+      </button>
+    </div>
+  ) : (
+    <form action={action} className="auth-form">
+      <FormMessage error={state.error} ok={state.ok} />
+      <DevLink link={state.devLink} what="open the confirmation link" />
+      <input type="hidden" name="email" value={email} />
+      <SubmitButton className="btn btn-ghost btn-lg" pendingText="Sending…">
+        Resend confirmation email
+      </SubmitButton>
+    </form>
+  );
+}
+
+/** Opened from the email link: confirms automatically, then continues to onboarding. */
+export function ConfirmEmail({ token, next }: { token: string; next?: string }) {
+  const [state, action] = useActionState(confirmEmailAction, initial);
+  const form = useRef<HTMLFormElement>(null);
+  const sent = useRef(false);
+  useEffect(() => {
+    if (!sent.current) {
+      sent.current = true;
+      form.current?.requestSubmit();
+    }
+  }, []);
+  return (
+    <form ref={form} action={action} className="auth-form">
+      <input type="hidden" name="token" value={token} />
+      <input type="hidden" name="next" value={next ?? ""} />
+      {state.error ? (
+        <>
+          <FormMessage error={state.error} />
+          <Link href="/login" className="btn btn-accent btn-lg">
+            Go to sign in
+          </Link>
+        </>
+      ) : (
+        <SubmitButton pendingText="Confirming your email…">Confirm my email</SubmitButton>
+      )}
     </form>
   );
 }
@@ -67,16 +136,7 @@ export function ForgotForm() {
   return (
     <form action={action} className="auth-form">
       <FormMessage error={state.error} ok={state.ok} />
-      {state.devLink && (
-        <div className="notice notice-warn">
-          <span>
-            Development mode (no email server configured):{" "}
-            <a className="link" href={state.devLink}>
-              open the reset link
-            </a>
-          </span>
-        </div>
-      )}
+      <DevLink link={state.devLink} what="open the reset link" />
       <Field label="Email" name="email" type="email" autoComplete="email" required />
       <SubmitButton pendingText="Sending…">Send reset link</SubmitButton>
     </form>

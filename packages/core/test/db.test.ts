@@ -7,7 +7,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setDb, withSystem, withTenant, type Sql } from "../src/db/client";
 import { migrate } from "../src/db/migrate";
-import { getSession, signIn, signUp } from "../src/services/auth";
+import { createEmailVerification, createPasswordReset, getSession, resetPassword, signIn, signUp, verifyEmail } from "../src/services/auth";
 import { addDnc, addLead, importLeads, listLeads, resetLeadsForRedial, bulkDnc } from "../src/services/leads";
 import { createCall, finalizeCall, transition, addTranscriptLine } from "../src/services/calls";
 import { saveCampaign } from "../src/services/campaigns";
@@ -44,6 +44,29 @@ run("database", () => {
     expect(s?.orgId).toBe(orgA);
     expect(s?.role).toBe("admin");
     await expect(signIn("asha@example.com", "nope")).rejects.toThrow(/don't match/);
+  });
+
+  it("requires email confirmation before signing in", async () => {
+    const r = await signUp({ name: "Chitra Iyer", email: "chitra@example.com", password: "password123", company: "Gamma Labs" }, {}, { verified: false });
+    expect(r.token).toBeNull();
+    await expect(signIn("chitra@example.com", "password123")).rejects.toMatchObject({ code: "unverified" });
+    await expect(signIn("chitra@example.com", "wrong-password1")).rejects.not.toMatchObject({ code: "unverified" });
+
+    const v = await createEmailVerification("Chitra@Example.com");
+    expect(v?.email).toBe("chitra@example.com");
+    const s1 = await verifyEmail(v!.token);
+    expect((await getSession(s1.token))?.orgName).toBe("Gamma Labs");
+    // A mail scanner opening the link first doesn't break it for the person.
+    expect((await verifyEmail(v!.token)).userId).toBe(r.userId);
+    await expect(verifyEmail("x".repeat(40))).rejects.toThrow(/invalid/);
+    expect(await createEmailVerification("chitra@example.com")).toBeNull(); // already confirmed
+    await expect(signIn("chitra@example.com", "password123")).resolves.toMatchObject({ userId: r.userId });
+
+    // Resetting the password through the emailed link also confirms the address.
+    await signUp({ name: "Dev Mehta", email: "dev@example.com", password: "password123", company: "Delta Co" }, {}, { verified: false });
+    const reset = await createPasswordReset("dev@example.com");
+    await resetPassword(reset!.token, "newpassword456");
+    await expect(signIn("dev@example.com", "newpassword456")).resolves.toBeTruthy();
   });
 
   it("scopes the very first query of a tenant transaction", async () => {
