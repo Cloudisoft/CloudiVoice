@@ -28,6 +28,11 @@ export const env = {
   get appUrl() {
     return (read("APP_URL") ?? "http://localhost:3000").replace(/\/$/, "");
   },
+  /** Site origins allowed to open browser voice sessions: APP_URL plus ALLOWED_ORIGINS (comma-separated). */
+  get allowedOrigins(): string[] {
+    const extra = (read("ALLOWED_ORIGINS") ?? "").split(",").map((o) => o.trim().replace(/\/$/, "")).filter(Boolean);
+    return [this.appUrl, ...extra];
+  },
   /** Public origin of the voice gateway (must be reachable by the carrier). */
   get voiceUrl() {
     return (read("VOICE_PUBLIC_URL") ?? "http://localhost:8080").replace(/\/$/, "");

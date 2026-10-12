@@ -475,3 +475,29 @@ textarea {
     transform: rotate(360deg);
   }
 }
+
+.error-screen {
+  max-width: 520px;
+  margin: 12vh auto;
+  padding: 0 16px;
+  text-align: center;
+}
+.error-screen h1 {
+  margin: 0 0 8px;
+  font-size: 26px;
+}
+.error-screen p {
+  color: var(--text-2);
+  margin: 0 0 20px;
+}
+.error-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.error-ref {
+  margin-top: 18px !important;
+  font-size: 12px;
+  color: var(--muted) !important;
+}

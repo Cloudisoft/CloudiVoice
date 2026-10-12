@@ -254,7 +254,7 @@ server.on("upgrade", (req, socket, head) => {
   }
   if (url.pathname === "/demo") {
     const origin = req.headers.origin ?? "";
-    if (env.isProduction && origin && !origin.startsWith(env.appUrl)) return socket.destroy();
+    if (env.isProduction && origin && !env.allowedOrigins.includes(origin.replace(/\/$/, ""))) return socket.destroy();
     const claims = verifyPayload<(DemoClaims | AgentTestClaims) & Record<string, unknown>>(token);
     if (!claims) return socket.destroy();
     if (claims.kind === "demo") wss.handleUpgrade(req, socket, head, (ws) => handleDemo(ws, claims as DemoClaims));

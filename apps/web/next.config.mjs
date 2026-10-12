@@ -9,6 +9,9 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Version-skew protection: a tab opened before a deploy does a full page load
+  // on its next navigation instead of failing to load the old build's files.
+  deploymentId: process.env.RAILWAY_DEPLOYMENT_ID || process.env.DEPLOYMENT_ID || undefined,
   transpilePackages: ["@cloudivoice/core"],
   serverExternalPackages: ["postgres", "exceljs", "mammoth", "unpdf", "nodemailer"],
   experimental: { serverActions: { bodySizeLimit: "12mb" } },
