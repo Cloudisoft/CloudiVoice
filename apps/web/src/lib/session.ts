@@ -9,8 +9,11 @@ import { ensureMigrated } from "./db";
 export const SESSION_COOKIE = "cv_session";
 
 export const currentUser = cache(async (): Promise<SessionUser | null> => {
-  await ensureMigrated();
+  // Read the cookie first: it makes the page render per request (never at build
+  // time, when the database isn't reachable) and skips the database when signed out.
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token) return null;
+  await ensureMigrated();
   return getSession(token);
 });
 
