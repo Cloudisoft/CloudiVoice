@@ -1,6 +1,7 @@
-import { aiPerMinute, formatInr, pricing } from "@cloudivoice/core/pricing";
+import { formatInr } from "@cloudivoice/core/pricing";
 import { usageSummary } from "@cloudivoice/core/services/analytics";
 import { fmtDate, PageHeader } from "@/components/ui/kit";
+import { CONTACT, mailLink, telLink, whatsappLink } from "@/lib/contact";
 import { tenant } from "@/lib/session";
 
 export const metadata = { title: "Usage & Billing" };
@@ -21,7 +22,6 @@ export default async function BillingPage() {
     usage: await usageSummary(tx),
     org: (await tx<{ monthly_spend_limit_paise: string | null; max_concurrency: number }[]>`select monthly_spend_limit_paise, max_concurrency from organizations`)[0]!,
   }), "billing.view");
-  const p = pricing();
   const monthSpend = usage.byCategory.filter((c) => c.category !== "credit").reduce((n, c) => n + Number(c.amount), 0);
   const limit = org.monthly_spend_limit_paise ? Number(org.monthly_spend_limit_paise) : null;
   return (
@@ -110,21 +110,29 @@ export default async function BillingPage() {
           </section>
           <section className="panel">
             <div className="panel-head">
-              <h2>Your rates</h2>
+              <h2>Your plan</h2>
+              <span className="chip chip-accent">Custom</span>
             </div>
-            <dl className="kv panel-body">
-              <dt>Telephony</dt>
-              <dd>{formatInr(p.perMinute.telephony, { decimals: true })}/min</dd>
-              <dt>AI agent (all layers)</dt>
-              <dd>{formatInr(aiPerMinute(p), { decimals: true })}/min</dd>
-              <dt>Phone number</dt>
-              <dd>{formatInr(p.numberRentalMonthly)}/month</dd>
-              <dt>Billing</dt>
-              <dd>Per second of connected time</dd>
-            </dl>
-            <p className="panel-body field-hint" style={{ paddingTop: 0 }}>
-              To add credits or change plans, contact Cloudisoft billing. Set a monthly spend limit under Settings.
-            </p>
+            <div className="panel-body stack">
+              <p className="field-hint" style={{ margin: 0 }}>
+                Your rates are agreed with Cloudisoft. To add credits, change your plan or get a quote for more volume, reach us on WhatsApp, phone or email. Set a monthly spend limit under Settings.
+              </p>
+              <div className="stack" style={{ gap: 8 }}>
+                {CONTACT.phones.map((ph) => (
+                  <a key={ph.digits} className="btn btn-ghost btn-sm" href={whatsappLink(ph.digits)} target="_blank" rel="noopener noreferrer">
+                    WhatsApp {ph.display}
+                  </a>
+                ))}
+                {CONTACT.phones.map((ph) => (
+                  <a key={`t${ph.digits}`} className="btn btn-quiet btn-sm" href={telLink(ph.digits)}>
+                    Call {ph.display}
+                  </a>
+                ))}
+                <a className="btn btn-quiet btn-sm" href={mailLink()}>
+                  {CONTACT.email}
+                </a>
+              </div>
+            </div>
           </section>
         </div>
       </div>

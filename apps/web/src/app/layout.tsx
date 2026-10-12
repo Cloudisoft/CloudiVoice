@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     template: "%s · CloudiVoice",
   },
   description:
-    "Build AI voice agents that speak Hindi, English and Indian languages to qualify leads, book appointments and support customers — on transparent per-minute pricing in rupees. A Cloudisoft product.",
+    "Build AI voice agents that speak Hindi, English and Indian languages to qualify leads, book appointments and support customers, with custom plans for every business. A Cloudisoft product.",
   icons: {
     icon: [
       { url: "/brand/mark-32.png", sizes: "32x32", type: "image/png" },

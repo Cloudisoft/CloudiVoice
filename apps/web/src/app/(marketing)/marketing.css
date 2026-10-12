@@ -615,172 +615,69 @@
   }
 }
 
-/* pricing */
-.rate-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  background: var(--surface);
-}
-.rate-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 15px;
-}
-.rate-table th,
-.rate-table td {
-  padding: 15px 20px;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-}
-.rate-table thead th {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
-  font-weight: 500;
-}
-.rate-table td:nth-child(2) {
-  color: var(--text-2);
-}
-.rate-table .num {
-  text-align: right;
-  white-space: nowrap;
-}
-.rate-table tfoot th,
-.rate-table tfoot td {
-  border-bottom: 0;
-  font-weight: 600;
-}
-.rate-table .total {
-  color: var(--accent);
-  font-size: 17px;
-}
-.rate-side {
-  display: grid;
-  align-content: start;
-  gap: 22px;
-  padding: 22px 24px;
-  border-left: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.015);
-}
-.rate-big {
-  margin: 8px 0 0;
-  font-size: 26px;
-  font-weight: 600;
-}
-.rate-big small {
-  font-size: 13px;
-  color: var(--muted);
-  font-weight: 400;
-}
-.rate-note {
-  margin: 8px 0 0;
-  color: var(--text-2);
-  font-size: 14.5px;
-}
-.plans {
-  list-style: none;
-  margin: 18px 0 0;
-  padding: 0;
+/* contact (custom plans) */
+.contact-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
-.plan {
+.contact-card {
   display: flex;
   flex-direction: column;
+  gap: 10px;
   padding: 24px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--surface);
 }
-.plan-hl {
-  border-color: var(--accent-line);
-  background: linear-gradient(180deg, rgba(255, 160, 30, 0.07), var(--surface) 60%);
+.contact-card-wa {
+  border-color: var(--line-strong);
+  background: linear-gradient(180deg, rgba(255, 176, 32, 0.06), transparent 70%), var(--surface);
 }
-.plan-head {
+.contact-card p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 15px;
+}
+.contact-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
 }
-.plan h3 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
+.contact-actions .btn {
+  justify-content: flex-start;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
-.plan-price {
-  margin: 16px 0 4px;
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.plan-price .mono {
-  font-family: var(--font-sans);
-}
-.plan-price small {
-  font-size: 13px;
-  color: var(--muted);
-  font-weight: 400;
-}
-.plan-sub {
-  margin: 0;
+.contact-points {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
   color: var(--muted);
   font-size: 14px;
 }
-.plan-features {
-  list-style: none;
-  margin: 20px 0 24px;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-  color: var(--text-2);
-  font-size: 14.5px;
-}
-.plan-features li::before {
+.contact-points li::before {
   content: "✓";
   color: var(--accent);
-  margin-right: 10px;
+  margin-right: 8px;
 }
-.plan .btn {
-  margin-top: auto;
+.price-pill a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
-.exclusions {
-  margin: 20px 0 0;
-  padding-left: 18px;
-  color: var(--muted);
-  font-size: 13.5px;
-  display: grid;
-  gap: 4px;
-}
-@media (max-width: 900px) {
-  .rate-card {
+@media (max-width: 860px) {
+  .contact-grid {
     grid-template-columns: 1fr;
-  }
-  .rate-side {
-    border-left: 0;
-    border-top: 1px solid var(--line);
-  }
-  .plans {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 560px) {
-  .rate-table th:nth-child(2),
-  .rate-table td:nth-child(2) {
-    display: none;
-  }
-  .rate-table th,
-  .rate-table td {
-    padding: 13px 14px;
   }
 }
 
-/* closing */
 .closing {
   padding: clamp(72px, 10vw, 140px) 0;
   text-align: center;

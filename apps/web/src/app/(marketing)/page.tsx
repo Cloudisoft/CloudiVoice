@@ -2,10 +2,10 @@ import Link from "next/link";
 import { DEMO_SCENARIOS } from "@cloudivoice/core/demoScenarios";
 import { allLanguages } from "@cloudivoice/core/languages";
 import { env, liveStackStatus } from "@cloudivoice/core/env";
-import { aiPerMinute, formatInr, pricing } from "@cloudivoice/core/pricing";
 import { DemoConsole } from "@/components/demo/DemoConsole";
 import { ArrowIcon } from "@/components/demo/DemoConsole";
 import { HearItButton } from "@/components/marketing/HearItButton";
+import { CONTACT, mailLink, telLink, whatsappLink } from "@/lib/contact";
 import { loadSamples, toMeta } from "@/lib/samples";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +48,6 @@ export default async function HomePage() {
   const samples = await loadSamples();
   const initial = samples.find((s) => s.id === "receptionist-hi") ?? samples[0]!;
   const languages = allLanguages().map((l) => ({ code: l.code, name: l.name, native: l.native, status: l.status }));
-  const p = pricing();
   const stack = liveStackStatus();
 
   return (
@@ -65,12 +64,10 @@ export default async function HomePage() {
 
             <p className="price-pill mono">
               <span>
-                Telephony from <b>{formatInr(p.perMinute.telephony, { decimals: true })}</b>/min
+                <b>Custom plans</b> built around your call volume
               </span>
               <span className="sep" aria-hidden="true" />
-              <span>
-                AI agent <b>{formatInr(aiPerMinute(p), { decimals: true })}</b>/min excl. telephony
-              </span>
+              <a href="#contact">Talk to us</a>
             </p>
 
             <h1 id="hero-title" className="hero-title">
@@ -90,7 +87,7 @@ export default async function HomePage() {
               </Link>
             </div>
             <p className="trust-line">
-              Designed for Indian businesses. Built to scale with you. <span className="mono credits">{formatInr(p.welcomeCredits)} in free credits.</span>
+              Designed for Indian businesses. Built to scale with you.
             </p>
 
 
@@ -115,9 +112,9 @@ export default async function HomePage() {
               </dd>
             </div>
             <div>
-              <dt className="label">Billing</dt>
+              <dt className="label">Pricing</dt>
               <dd>
-                Per second, in ₹<span className="fact-sub">Itemised on every call</span>
+                Custom<span className="fact-sub">Tailored to your volume</span>
               </dd>
             </div>
             <div>
@@ -269,8 +266,8 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------ PRICING */}
-      <section className="section" id="pricing" aria-labelledby="pricing-title">
+      {/* ------------------------------------------------------------ CONTACT */}
+      <section className="section" id="contact" aria-labelledby="contact-title">
         <div className="container">
           <div className="section-head">
             <div className="section-index">
@@ -278,119 +275,50 @@ export default async function HomePage() {
               <span className="rule" aria-hidden="true" />
               <span className="label">Pricing</span>
             </div>
-            <h2 id="pricing-title" className="section-title">Transparent, per-minute, in rupees.</h2>
-            <p className="section-sub">Billed per second of connected time. Every component is itemised on each call, so you always know where the money goes.</p>
+            <h2 id="contact-title" className="section-title">Custom plans, built around your business.</h2>
+            <p className="section-sub">
+              Every business calls differently. Tell us your call volume, languages and use case, and we’ll put together a plan that fits — usually within a day.
+            </p>
           </div>
 
-          <div className="rate-card">
-            <table className="rate-table">
-              <caption className="sr-only">Per-minute rates</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Component</th>
-                  <th scope="col">What it covers</th>
-                  <th scope="col" className="num">
-                    Per minute
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Telephony</td>
-                  <td>Indian phone network, inbound or outbound</td>
-                  <td className="num mono">{formatInr(p.perMinute.telephony, { decimals: true })}</td>
-                </tr>
-                <tr>
-                  <td>Speech-to-text</td>
-                  <td>Understanding the caller in Hindi, English and code-mixed speech</td>
-                  <td className="num mono">{formatInr(p.perMinute.speech_to_text, { decimals: true })}</td>
-                </tr>
-                <tr>
-                  <td>Reasoning</td>
-                  <td>The agent’s thinking, tools and knowledge lookups</td>
-                  <td className="num mono">{formatInr(p.perMinute.reasoning, { decimals: true })}</td>
-                </tr>
-                <tr>
-                  <td>Text-to-speech</td>
-                  <td>Natural Indian voices</td>
-                  <td className="num mono">{formatInr(p.perMinute.text_to_speech, { decimals: true })}</td>
-                </tr>
-                <tr>
-                  <td>Platform</td>
-                  <td>Campaigns, analytics, transcripts, storage within retention</td>
-                  <td className="num mono">{formatInr(p.perMinute.platform, { decimals: true })}</td>
-                </tr>
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th scope="row" colSpan={2}>
-                    All-in, per connected minute
-                  </th>
-                  <td className="num mono total">{formatInr(aiPerMinute(p) + p.perMinute.telephony, { decimals: true })}</td>
-                </tr>
-              </tfoot>
-            </table>
-            <div className="rate-side">
-              <div>
-                <span className="label">Phone number</span>
-                <p className="rate-big mono">
-                  {formatInr(p.numberRentalMonthly)}
-                  <small>/month</small>
-                </p>
+          <div className="contact-grid">
+            <div className="contact-card contact-card-wa">
+              <span className="label">WhatsApp</span>
+              <p>Message us any time — the quickest way to get a quote.</p>
+              <div className="contact-actions">
+                {CONTACT.phones.map((ph) => (
+                  <a key={ph.digits} className="btn btn-accent" href={whatsappLink(ph.digits)} target="_blank" rel="noopener noreferrer">
+                    <WhatsAppGlyph /> {ph.display}
+                  </a>
+                ))}
               </div>
-              <div>
-                <span className="label">Recording storage beyond retention</span>
-                <p className="rate-big mono">
-                  {formatInr(p.storagePerGbMonth)}
-                  <small>/GB-month</small>
-                </p>
+            </div>
+            <div className="contact-card">
+              <span className="label">Call us</span>
+              <p>Speak with our team about your requirements.</p>
+              <div className="contact-actions">
+                {CONTACT.phones.map((ph) => (
+                  <a key={ph.digits} className="btn btn-ghost" href={telLink(ph.digits)}>
+                    <PhoneGlyph /> {ph.display}
+                  </a>
+                ))}
               </div>
-              <div>
-                <span className="label">Free trial</span>
-                <p className="rate-note">
-                  {formatInr(p.welcomeCredits)} in credits, up to {p.trial.maxMinutes} minutes and {p.trial.maxConcurrentCalls} concurrent call while you test.
-                </p>
+            </div>
+            <div className="contact-card">
+              <span className="label">Email</span>
+              <p>Send us your use case and expected monthly minutes.</p>
+              <div className="contact-actions">
+                <a className="btn btn-ghost" href={mailLink()}>
+                  <MailGlyph /> {CONTACT.email}
+                </a>
               </div>
             </div>
           </div>
 
-          <ul className="plans">
-            {p.plans.map((plan) => (
-              <li key={plan.id} className={`plan ${plan.highlight ? "plan-hl" : ""}`}>
-                <div className="plan-head">
-                  <h3>{plan.name}</h3>
-                  {plan.highlight && <span className="chip chip-accent">Most teams</span>}
-                </div>
-                <p className="plan-price">
-                  {plan.monthlyFee ? (
-                    <>
-                      <span className="mono">{formatInr(plan.monthlyFee)}</span>
-                      <small>/month</small>
-                    </>
-                  ) : (
-                    <span className="mono">Pay as you go</span>
-                  )}
-                </p>
-                <p className="plan-sub">
-                  {plan.includedMinutes ? `${plan.includedMinutes.toLocaleString("en-IN")} minutes included · ` : ""}
-                  {plan.concurrency} concurrent calls
-                </p>
-                <ul className="plan-features">
-                  {plan.features.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-                <Link href={`/signup?plan=${plan.id}`} className={`btn ${plan.highlight ? "btn-accent" : "btn-ghost"}`}>
-                  Start free
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <ul className="exclusions">
-            {p.exclusions.map((e) => (
-              <li key={e}>{e}</li>
-            ))}
-            <li>Overage beyond included minutes is billed at the per-minute rates above.</li>
+          <ul className="contact-points">
+            <li>Free trial to test your agent before you commit</li>
+            <li>Volume-based pricing in rupees, GST invoices</li>
+            <li>Indian phone numbers, setup and onboarding help included</li>
           </ul>
         </div>
       </section>
@@ -411,6 +339,34 @@ export default async function HomePage() {
         </div>
       </section>
     </>
+  );
+}
+
+function WhatsAppGlyph() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.8-1.3a.5.5 0 0 0 0-.5l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .1-1.2c0-.2-.2-.2-.5-.3Z"
+      />
+    </svg>
+  );
+}
+
+function PhoneGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2Z" />
+    </svg>
+  );
+}
+
+function MailGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path d="m3 7 9 6 9-6" fill="none" stroke="currentColor" strokeWidth="2" />
+    </svg>
   );
 }
 

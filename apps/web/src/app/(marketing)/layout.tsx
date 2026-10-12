@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { SiteHeader } from "@/components/marketing/SiteHeader";
 import { currentUser } from "@/lib/session";
+import { CONTACT, mailLink, telLink, whatsappLink } from "@/lib/contact";
 import "./marketing.css";
 
 export default async function MarketingLayout({ children }: { children: React.ReactNode }) {
@@ -28,7 +29,7 @@ export default async function MarketingLayout({ children }: { children: React.Re
               <span className="label">Product</span>
               <Link href="/#platform">Platform</Link>
               <Link href="/#solutions">Solutions</Link>
-              <Link href="/#pricing">Pricing</Link>
+              <Link href="/#contact">Pricing</Link>
               <Link href="/#demo">Live demo</Link>
             </div>
             <div>
@@ -36,6 +37,20 @@ export default async function MarketingLayout({ children }: { children: React.Re
               <Link href="/resources">Guides</Link>
               <Link href="/resources#campaigns">Running a campaign</Link>
               <Link href="/resources#results">Reading results</Link>
+            </div>
+            <div>
+              <span className="label">Contact</span>
+              {CONTACT.phones.map((ph) => (
+                <a key={ph.digits} href={whatsappLink(ph.digits)} target="_blank" rel="noopener noreferrer">
+                  WhatsApp {ph.display}
+                </a>
+              ))}
+              {CONTACT.phones.map((ph) => (
+                <a key={`t${ph.digits}`} href={telLink(ph.digits)}>
+                  Call {ph.display}
+                </a>
+              ))}
+              <a href={mailLink()}>{CONTACT.email}</a>
             </div>
             <div>
               <span className="label">Account</span>
