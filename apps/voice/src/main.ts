@@ -4,7 +4,10 @@
  *  - WebSocket media streams for phone calls and browser demos
  *  - Background loops: campaign dialer, reconciliation, recording backfill, retention
  */
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { join, resolve } from "node:path";
 import { WebSocketServer } from "ws";
 import { db, withSystem, withTenant } from "@cloudivoice/core/db/client";
 import { migrate } from "@cloudivoice/core/db/migrate";
@@ -175,6 +178,26 @@ async function handleTransferXml(req: IncomingMessage, res: ServerResponse) {
   return xml(res, telephony()!.transferResponse({ toE164: to.e164, callerId: from, actionUrl: `${env.voiceUrl}/telephony/transfer-result?callId=${callId}` }));
 }
 
+/**
+ * Recordings live on this service's private volume. The web app streams them
+ * through here with a short-lived token it signs after checking permissions.
+ */
+async function serveRecording(req: IncomingMessage, res: ServerResponse) {
+  const token = new URL(req.url ?? "/", "http://x").searchParams.get("token") ?? "";
+  const claims = verifyPayload<{ kind: string; key: string }>(token);
+  if (!claims || claims.kind !== "recording" || typeof claims.key !== "string") return send(res, 403, "forbidden");
+  const root = resolve(env.storageDir);
+  const path = resolve(join(root, claims.key));
+  if (!path.startsWith(root + "/")) return send(res, 404, "not found");
+  try {
+    const s = await stat(path);
+    res.writeHead(200, { "Content-Type": "audio/mpeg", "Content-Length": String(s.size), "Cache-Control": "private, no-store" });
+    createReadStream(path).pipe(res);
+  } catch {
+    send(res, 404, "not found");
+  }
+}
+
 const server = createServer(async (req, res) => {
   const path = (req.url ?? "/").split("?")[0];
   try {
@@ -183,6 +206,7 @@ const server = createServer(async (req, res) => {
       return send(res, 200, JSON.stringify({ ok: true, stack: liveStackStatus() }), "application/json");
     }
     if (req.method !== "POST" && req.method !== "GET") return send(res, 405, "method not allowed");
+    if (path === "/internal/recording" && req.method === "GET") return await serveRecording(req, res);
     switch (path) {
       case "/telephony/answer":
         return await handleAnswer(req, res);
