@@ -216,3 +216,32 @@ describe("crypto", () => {
     expect(verifyPayload(signPayload({ a: 1 }, -1))).toBeNull();
   });
 });
+
+describe("name placeholders", () => {
+  const cfgBase = { company_name: "Snyder Staffing", persona_name: "Zenab" };
+  it("treats lead_name, name and first_name as the same thing", async () => {
+    const { templateVars } = await import("../src/agentPrompt");
+    const { fillTemplate } = await import("../src/agentConfig");
+    const vars = templateVars({ ...cfgBase } as never, { direction: "outbound", canTransfer: false, lead: { first_name: "Vikram", last_name: "Saw" } });
+    expect(fillTemplate("{{lead_name}}|{{Name}}|{{first_name}}|{{customer_name}}|{{full_name}}", vars)).toBe("Vikram|Vikram|Vikram|Vikram|Vikram Saw");
+  });
+  it("never reads a broken greeting when the lead has no name", async () => {
+    const { fillOpening } = await import("../src/agentConfig");
+    const v = { agent_name: "Zenab", company: "Snyder Staffing", first_name: "", lead_name: "" };
+    expect(fillOpening("“नमस्ते! मैं {{company}} से {{agent_name}} बोल रही हूँ। क्या मेरी बात {{lead_name}} से हो रही है?”", v, "hi-IN")).toBe(
+      "नमस्ते! मैं Snyder Staffing से Zenab बोल रही हूँ। क्या अभी दो मिनट बात करना ठीक रहेगा?",
+    );
+    expect(fillOpening("नमस्ते {{first_name}} जी, मैं {{agent_name}} बोल रही हूँ।", v, "hi-IN")).toBe("नमस्ते जी, मैं Zenab बोल रही हूँ।");
+    expect(fillOpening("Hi {{lead_name}}, this is {{agent_name}}.", v, "en-IN")).toBe("Hi, this is Zenab.");
+    expect(fillOpening("नमस्ते {{lead_name}} जी!", { ...v, lead_name: "Asha", first_name: "Asha" }, "hi-IN")).toBe("नमस्ते Asha जी!");
+  });
+  it("fills placeholders inside the script/SOP sent to the agent", async () => {
+    const { buildSystemPrompt } = await import("../src/agentPrompt");
+    const { parseAgentConfig } = await import("../src/agentConfig");
+    const cfg = parseAgentConfig({ ...cfgBase, instructions: "Company: {{company}}\nAgent Name: {{agent_name}}\nAsk for {{lead_name}} जी." });
+    const prompt = buildSystemPrompt(cfg, { direction: "outbound", canTransfer: false, lead: { first_name: "Vikram" } });
+    expect(prompt).toContain("Company: Snyder Staffing\nAgent Name: Zenab\nAsk for Vikram जी.");
+    expect(prompt).not.toMatch(/\{\{/);
+  });
+});
+

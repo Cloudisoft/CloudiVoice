@@ -179,7 +179,7 @@ export function AgentEditor({ id, name, config, useCases, languages, voices, can
               <label htmlFor="a-open">Opening line</label>
               <textarea id="a-open" name="opening_line" className="textarea" style={{ minHeight: 70 }} defaultValue={config.opening_line} placeholder="Leave empty to use the default for this use case" />
               <span className="field-hint">
-                Variables: <code className="mono">{"{{first_name}}"}</code> <code className="mono">{"{{agent_name}}"}</code> <code className="mono">{"{{company}}"}</code> and any custom lead field.
+                Variables: <code className="mono">{"{{first_name}}"}</code> (same as <code className="mono">{"{{lead_name}}"}</code> / <code className="mono">{"{{name}}"}</code>), <code className="mono">{"{{full_name}}"}</code>, <code className="mono">{"{{agent_name}}"}</code>, <code className="mono">{"{{company}}"}</code> and any custom lead field. They work in the script too. If a lead has no name, the greeting adapts automatically.
               </span>
             </div>
             <div className="field span-2">

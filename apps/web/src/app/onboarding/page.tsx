@@ -212,7 +212,7 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
               <label htmlFor="g-open">Opening line</label>
               <textarea id="g-open" name="opening_line" className="textarea" style={{ minHeight: 80 }} defaultValue={cfg.opening_line || defaultOpening(cfg.use_case, cfg.primary_language, cfg.voice)} />
               <span className="field-hint">
-                Use <code className="mono">{"{{first_name}}"}</code>, <code className="mono">{"{{agent_name}}"}</code> and <code className="mono">{"{{company}}"}</code>.
+                Use <code className="mono">{"{{first_name}}"}</code> (or <code className="mono">{"{{lead_name}}"}</code>), <code className="mono">{"{{agent_name}}"}</code> and <code className="mono">{"{{company}}"}</code>.
               </span>
             </div>
             <div className="form-actions span-2">

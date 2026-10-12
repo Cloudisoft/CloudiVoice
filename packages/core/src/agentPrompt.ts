@@ -1,4 +1,4 @@
-import { type AgentConfig, defaultOpening, fillTemplate, USE_CASES, voiceGender } from "./agentConfig";
+import { type AgentConfig, defaultOpening, fillOpening, fillTemplate, USE_CASES, voiceGender } from "./agentConfig";
 import { getLanguage } from "./languages";
 
 export interface CallContext {
@@ -21,20 +21,29 @@ export interface CallContext {
 
 export function templateVars(cfg: AgentConfig, ctx: CallContext): Record<string, string> {
   const lead = ctx.lead ?? {};
+  const first = (lead.first_name ?? "").trim();
+  const full = [lead.first_name, lead.last_name].map((x) => (x ?? "").trim()).filter(Boolean).join(" ");
   return {
+    ...(lead.custom ?? {}),
     agent_name: ctx.introName || cfg.persona_name,
     company: cfg.company_name,
-    first_name: lead.first_name ?? "",
-    last_name: lead.last_name ?? "",
+    company_name: cfg.company_name,
+    // All of these mean the person's (first) name, so scripts can use any of them.
+    first_name: first,
+    lead_name: first,
+    name: first,
+    customer_name: first,
+    caller_name: first,
+    full_name: full,
+    last_name: (lead.last_name ?? "").trim(),
     city: lead.city ?? "",
-    ...(lead.custom ?? {}),
   };
 }
 
 export function openingLine(cfg: AgentConfig, ctx: CallContext): string {
   const hindi = cfg.primary_language === "hi-IN";
   const tpl = cfg.opening_line || defaultOpening(cfg.use_case, cfg.primary_language, cfg.voice);
-  let line = fillTemplate(tpl, templateVars(cfg, ctx));
+  let line = fillOpening(tpl, templateVars(cfg, ctx), cfg.primary_language);
   if (ctx.returningCaller && ctx.lead?.first_name) {
     line = hindi
       ? `नमस्ते ${ctx.lead.first_name} जी, दोबारा call करने के लिए धन्यवाद! ${line.replace(/^नमस्ते[^!।]*[!।]\s*/, "")}`
@@ -77,6 +86,9 @@ export function buildSystemPrompt(cfg: AgentConfig, ctx: CallContext): string {
       ].filter(Boolean)
     : [];
 
+  const vars = templateVars(cfg, ctx);
+  const fill = (t: string) => fillTemplate(t, vars);
+  const personName = vars.first_name;
   const tone = {
     warm: "warm, kind and patient",
     professional: "polished and professional",
@@ -135,9 +147,12 @@ Current date and time for the caller: ${formatNow(ctx)}. Use it silently to turn
 - Never invent prices, policies, availability or facts. ${cfg.knowledge_enabled ? "Use lookup_knowledge for company information; if it has no answer, say a team member will follow up." : "If you do not know, say a team member will follow up."}
 - Never ask for card numbers, CVV, OTPs, passwords or Aadhaar numbers.
 ${ctx.isDemo ? "- This is a public demo with synthetic data only. Bookings and details are not real; you may say so if asked.\n" : ""}
+# The person
+${personName ? `- Their name is ${vars.full_name || personName}. Address them as "${personName}${cfg.primary_language === "hi-IN" ? " जी" : ""}" occasionally — not in every sentence.` : ctx.direction === "outbound" ? "- You don't have their name on file. Don't guess or invent one; if it helps, politely ask who you're speaking with." : "- You may not know the caller's name yet; ask politely when it's useful."}
+
 # Goals
-${cfg.goals.length ? cfg.goals.map((g, i) => `${i + 1}. ${g}`).join("\n") : "Help the caller efficiently and leave them with a clear next step."}
+${cfg.goals.length ? cfg.goals.map((g, i) => `${i + 1}. ${fill(g)}`).join("\n") : "Help the caller efficiently and leave them with a clear next step."}
 ${cfg.qualification_criteria ? `\n# Qualification criteria\n${cfg.qualification_criteria}\nUse mark_qualified or mark_disqualified once you know.\n` : ""}
 ${knownDetails.length ? `\n# Details already on file\n${knownDetails.join("\n")}\n` : ""}
-${cfg.instructions ? `\n# Script and SOP from ${cfg.company_name} (follow closely)\nFollow this flow, policies and wording in spirit, adapting naturally to what the caller says. Don't read it word-for-word, don't skip required steps or disclosures, and if the caller goes off-script, help them and then return to the flow.\n${cfg.instructions}\n` : ""}`.replace(/\n{3,}/g, "\n\n");
+${cfg.instructions ? `\n# Script and SOP from ${cfg.company_name} (follow closely)\nFollow this flow, policies and wording in spirit, adapting naturally to what the caller says. Don't read it word-for-word, don't skip required steps or disclosures, and if the caller goes off-script, help them and then return to the flow.\n${fill(cfg.instructions)}\n` : ""}`.replace(/\n{3,}/g, "\n\n");
 }

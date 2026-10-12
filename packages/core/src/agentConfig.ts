@@ -83,14 +83,49 @@ export function defaultOpening(useCase: UseCase, language: string, voice: string
   return voiceGender(voice) === "male" ? o.hi_m : o.hi_f;
 }
 
-/** Fill {{variables}} from lead/campaign data; unknown variables are removed cleanly. */
+/** Placeholders that all mean "the person's name" — interchangeable in scripts. */
+export const NAME_VARIABLES = ["first_name", "lead_name", "name", "customer_name", "caller_name", "full_name"] as const;
+const NAME_RE = new RegExp(`\\{\\{\\s*(${NAME_VARIABLES.join("|")})\\s*\\}\\}`, "i");
+
+/** Fill {{variables}} from lead/campaign data (case-insensitive); unknown variables are removed cleanly. */
 export function fillTemplate(template: string, vars: Record<string, string | null | undefined>): string {
+  const lower: Record<string, string | null | undefined> = {};
+  for (const [k, v] of Object.entries(vars)) lower[k.toLowerCase()] = v;
   return template
     .replace(/\{\{\s*([a-z0-9_.]+)\s*\}\}/gi, (_, k: string) => {
-      const v = vars[k] ?? vars[k.replace(/^custom_field\./, "")];
+      const key = k.toLowerCase();
+      const v = lower[key] ?? lower[key.replace(/^custom_field\./, "")];
       return v == null ? "" : String(v);
     })
-    .replace(/\s+([,.!?।])/g, "$1")
-    .replace(/\s{2,}/g, " ")
+    .replace(/[ \t]+([,.!?।])/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
     .trim();
+}
+
+/**
+ * A spoken opening line that never sounds broken when the lead has no name:
+ * "नमस्ते {{first_name}} जी" → "नमस्ते जी", "Hi {{name}}," → "Hi,", and a
+ * sentence that only works with a name ("क्या मेरी बात {{first_name}} से हो
+ * रही है?") becomes a polite "is this a good time?" question.
+ */
+export function fillOpening(template: string, vars: Record<string, string | null | undefined>, language: string): string {
+  let t = template.trim().replace(/^[“"'‘]+|[”"'’]+$/g, "").trim();
+  const hasName = NAME_VARIABLES.some((k) => (vars[k] ?? "").toString().trim());
+  if (!hasName && NAME_RE.test(t)) {
+    const N = `\\{\\{\\s*(?:${NAME_VARIABLES.join("|")})\\s*\\}\\}`;
+    t = t
+      .replace(new RegExp(`(नमस्ते|नमस्कार|हैलो|हेलो)\\s+${N}\\s*(जी)?`, "gi"), (_m, g: string) => `${g} जी`)
+      .replace(new RegExp(`\\b(Hi|Hello|Hey|Dear|Good (?:morning|afternoon|evening))\\s+${N}\\s*(ji)?`, "gi"), "$1")
+      .replace(new RegExp(`\\s*${N}\\s+(जी|ji)\\b`, "gi"), " जी");
+    if (NAME_RE.test(t)) {
+      const sentences = t.match(/[^.!?।]+[.!?।]*/g) ?? [t];
+      const kept = sentences.filter((x) => !NAME_RE.test(x));
+      const droppedQuestion = sentences.some((x) => NAME_RE.test(x) && /[?]\s*$/.test(x));
+      t = kept.join(" ").trim();
+      if (droppedQuestion && !/[?]\s*$/.test(t)) {
+        t = `${t} ${language === "hi-IN" ? "क्या अभी दो मिनट बात करना ठीक रहेगा?" : "Is this a good time to talk for a couple of minutes?"}`.trim();
+      }
+    }
+  }
+  return fillTemplate(t, vars);
 }
