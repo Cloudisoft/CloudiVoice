@@ -77,7 +77,12 @@ export const env = {
     return read("STT_MODEL") ?? "saaras:v3";
   },
   get ttsModel() {
-    return read("TTS_MODEL") ?? "bulbul:v3";
+    return read("TTS_MODEL") ?? "bulbul:v4-flash";
+  },
+  /** Optional voice expressiveness (0.01–1). Unset = the engine's tuned default. */
+  get ttsTemperature(): number | undefined {
+    const v = Number(read("TTS_TEMPERATURE"));
+    return Number.isFinite(v) && v > 0 && v <= 1 ? v : undefined;
   },
   get anthropicApiKey() {
     return read("ANTHROPIC_API_KEY");

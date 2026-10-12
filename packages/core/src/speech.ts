@@ -49,6 +49,42 @@ export async function transcribe(
   return { text: (data.transcript ?? "").trim(), language: data.language_code ?? null };
 }
 
+/**
+ * Conversational personas for each voice offered in the agent builder.
+ * The newer model renders phone-style speech (natural pauses, intonation,
+ * Hinglish) far better than the general-purpose voices; genders match so
+ * Hindi grammar stays correct. Languages without a persona fall back to the
+ * previous model with the same voice.
+ */
+const PERSONAS: Record<string, { hi: string; en: string }> = {
+  priya: { hi: "aparna_hi_customer", en: "neha_en_customer" },
+  simran: { hi: "simran_hi_conversation", en: "simran_en_conversation" },
+  kavya: { hi: "kavya_hi_conversational", en: "roopa_en_conversational" },
+  ritu: { hi: "ritu_hi_customer_warm", en: "ishita_en_customer" },
+  aditya: { hi: "aditya_hi_conversational", en: "dev_en_conversational" },
+  rahul: { hi: "rahul_hi_conversational", en: "deven_en_conversation" },
+  dev: { hi: "kabir_hi_conversational", en: "dev_en_conversational" },
+  amit: { hi: "amit_hi_conversational", en: "deven_en_conversation" },
+};
+const LEGACY_MODEL = "bulbul:v3";
+
+/** Which model + speaker to use for a voice in a language. */
+export function ttsVoice(voice: string, language: string): { model: string; speaker: string } {
+  const model = env.ttsModel;
+  if (model === LEGACY_MODEL || model.startsWith("bulbul:v2")) return { model, speaker: voice };
+  if (voice.includes("_")) return { model, speaker: voice }; // already a persona id
+  const p = PERSONAS[voice];
+  const tag = language === "hi-IN" ? "hi" : language === "en-IN" ? "en" : null;
+  if (p && tag) return { model, speaker: p[tag] };
+  return { model: LEGACY_MODEL, speaker: voice };
+}
+
+function ttsParams(opts: { language: string; voice: string }) {
+  const { model, speaker } = ttsVoice(opts.voice, opts.language);
+  const temperature = model === LEGACY_MODEL ? undefined : env.ttsTemperature;
+  return { model, speaker, ...(temperature ? { temperature } : {}) };
+}
+
 export interface SynthesisOptions {
   language: string;
   voice: string;
@@ -69,9 +105,8 @@ export async function* synthesizeStream(text: string, opts: SynthesisOptions): A
     body: JSON.stringify({
       text,
       language_code: opts.language,
-      speaker: opts.voice,
-      model: env.ttsModel,
-      pace: opts.pace ?? 1.05,
+      ...ttsParams(opts),
+      pace: opts.pace ?? 1.0,
       speech_sample_rate: opts.sampleRate,
       output_audio_codec: "linear16",
     }),
@@ -118,8 +153,7 @@ export async function synthesize(text: string, opts: Omit<SynthesisOptions, "sam
     body: JSON.stringify({
       text,
       language_code: opts.language,
-      speaker: opts.voice,
-      model: env.ttsModel,
+      ...ttsParams(opts),
       pace: opts.pace ?? 1.0,
       speech_sample_rate: opts.sampleRate ?? 22050,
     }),

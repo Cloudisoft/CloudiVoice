@@ -87,8 +87,8 @@ const BARGE_VOICED_MS = 650; // sustained speech that interrupts regardless of w
 const REASK_MIN_VOICED_MS = 550; // only re-ask for real speech we couldn't read
 
 const FILLERS: Record<string, string[]> = {
-  "hi-IN": ["जी।", "अच्छा।", "हम्म।", "जी, एक सेकंड।"],
-  "en-IN": ["Sure.", "Okay.", "Mm-hmm.", "Right, one moment."],
+  "hi-IN": ["जी।", "अच्छा।", "जी, एक सेकंड।", "हाँ जी।"],
+  "en-IN": ["Sure.", "Okay.", "Right, one moment.", "Got it."],
 };
 const CHECKINS: Record<string, string[]> = {
   "hi-IN": ["क्या आप अभी भी line पर हैं?", "लगता है आवाज़ नहीं आ रही। हम थोड़ी देर बाद फिर कोशिश करेंगे। धन्यवाद!"],

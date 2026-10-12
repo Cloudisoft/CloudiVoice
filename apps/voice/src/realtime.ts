@@ -7,7 +7,7 @@
 import WebSocket from "ws";
 import { pcm16ToBytes, bytesToPcm16, resample } from "@cloudivoice/core/audio";
 import { env } from "@cloudivoice/core/env";
-import { synthesizeStream, transcribe, type Transcript } from "@cloudivoice/core/speech";
+import { synthesizeStream, transcribe, ttsVoice, type Transcript } from "@cloudivoice/core/speech";
 import { log } from "./log";
 
 const WS_BASE = () => env.speechApiBase.replace(/^http/, "ws");
@@ -223,14 +223,17 @@ export class StreamingSynthesizer implements Synthesizer {
     await previous;
     try {
       const ok = await Promise.race([this.ready, new Promise<boolean>((r) => setTimeout(() => r(false), 3000))]);
-      if (!ok || this.ws?.readyState !== WebSocket.OPEN) {
+      const tts = ttsVoice(opts.voice, opts.language);
+      // The socket speaks one model; a voice that needs another one uses the HTTP stream.
+      if (!ok || this.ws?.readyState !== WebSocket.OPEN || tts.model !== env.ttsModel) {
         yield* synthesizeStream(text, { language: opts.language, voice: opts.voice, pace: opts.pace, sampleRate: this.sampleRate, signal: opts.signal });
         return;
       }
       const config = JSON.stringify({
         type: "config",
         data: {
-          speaker: opts.voice,
+          speaker: tts.speaker,
+          ...(env.ttsTemperature ? { temperature: env.ttsTemperature } : {}),
           target_language_code: opts.language,
           language_code: opts.language,
           pace: opts.pace,

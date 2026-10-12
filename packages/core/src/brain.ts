@@ -120,7 +120,7 @@ export class SentenceSplitter {
     const out: string[] = [];
     if (this.first) {
       // Start speaking at the first clause so the caller hears us sooner.
-      const m = /^(.{12,}?[,—–:;])\s+/s.exec(this.buf);
+      const m = /^(.{24,}?[,—–:;])\s+/s.exec(this.buf);
       if (m && !/[.!?।]/.test(m[1]!)) {
         out.push(m[1]!.trim());
         this.buf = this.buf.slice(m[0].length);
