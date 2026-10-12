@@ -190,6 +190,53 @@ export async function importLeads(
   return { ...res, listId };
 }
 
+export interface NewLead {
+  firstName?: string | null;
+  lastName?: string | null;
+  phone: string;
+  email?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  language?: string | null;
+  custom?: Record<string, string>;
+  listId?: string | null;
+  listName?: string | null;
+}
+
+export type AddLeadResult =
+  | { ok: true; id: string; dnc: boolean; listId: string | null }
+  | { ok: false; field?: "phone" | "email" | "pincode"; error: string; existingId?: string };
+
+/** Add one lead by hand, with the same cleaning and checks as an import. */
+export async function addLead(tx: Tx, orgId: string, userId: string, input: NewLead): Promise<AddLeadResult> {
+  const phone = normalizePhone(input.phone);
+  if (!phone) return { ok: false, field: "phone", error: "Enter a valid phone number, e.g. 98765 43210 or +91 98765 43210." };
+  const email = input.email?.trim().toLowerCase() || null;
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, field: "email", error: "Enter a valid email address." };
+  const pincode = input.pincode?.replace(/\D/g, "") || null;
+  if (pincode && pincode.length !== 6) return { ok: false, field: "pincode", error: "PIN codes have 6 digits." };
+
+  const [existing] = await tx<{ id: string }[]>`select id from leads where phone_e164 = ${phone.e164}`;
+  if (existing) return { ok: false, field: "phone", error: "A lead with this phone number already exists.", existingId: existing.id };
+
+  let listId = input.listId || null;
+  if (!listId && input.listName?.trim()) {
+    const [l] = await tx<{ id: string }[]>`insert into lead_lists (org_id, name) values (${orgId}, ${input.listName.trim().slice(0, 80)}) returning id`;
+    listId = l!.id;
+  }
+  const dnc = (await tx`select 1 from dnc_entries where phone_e164 = ${phone.e164}`).length > 0;
+  const clip = (v: string | null | undefined, n: number) => v?.trim().slice(0, n) || null;
+  const [row] = await tx<{ id: string }[]>`
+    insert into leads (org_id, first_name, last_name, email, phone_e164, phone_digits, city, state, pincode, language, custom, dnc)
+    values (${orgId}, ${clip(input.firstName, 80)}, ${clip(input.lastName, 80)}, ${email?.slice(0, 120) ?? null}, ${phone.e164}, ${phone.national},
+            ${clip(input.city, 80)}, ${clip(input.state, 80)}, ${pincode}, ${clip(input.language, 10)}, ${tx.json(input.custom ?? {})}, ${dnc})
+    returning id`;
+  if (listId) await tx`insert into lead_list_members (list_id, lead_id, org_id) values (${listId}, ${row!.id}, ${orgId}) on conflict do nothing`;
+  await audit(tx, orgId, userId, "lead.created", { type: "lead", id: row!.id }, { source: "manual", list_id: listId });
+  return { ok: true, id: row!.id, dnc, listId };
+}
+
 export interface LeadFilter {
   q?: string;
   listId?: string;

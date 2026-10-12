@@ -111,8 +111,13 @@
   font-size: 12px;
   flex: none;
 }
-.side-user .who {
+.side-user {
   min-width: 0;
+}
+.side-user .who {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 .side-user .who b {
   display: block;
@@ -215,6 +220,16 @@
   grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+}
+/* Wide tables and rows scroll inside their panel instead of widening the page. */
+.grid-main-side > *,
+.stack > *,
+.panel {
+  min-width: 0;
+}
+.panel-head {
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .form-grid {
   display: grid;
@@ -405,6 +420,8 @@
   overflow-x: auto;
 }
 .tab {
+  flex: none;
+  white-space: nowrap;
   padding: 10px 14px;
   font-size: 14px;
   color: var(--muted);
@@ -721,7 +738,7 @@
 
 @media (max-width: 1100px) {
   .grid-main-side {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .grid-3 {
     grid-template-columns: 1fr 1fr;
@@ -891,4 +908,22 @@
   .skel {
     animation: none;
   }
+}
+
+.custom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 8px;
+  margin-top: 8px;
+}
+@media (max-width: 640px) {
+  .custom-row {
+    grid-template-columns: 1fr;
+  }
+}
+.label-like {
+  font-weight: 500;
+}
+.req {
+  color: var(--accent);
 }

@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { addDnc, bulkAddToList, bulkDelete, bulkDnc, guessMapping, importLeads, leadIdsForFilter, type LeadFilter, parseSheet } from "@cloudivoice/core/services/leads";
+import { redirect } from "next/navigation";
+import { addDnc, addLead, bulkAddToList, bulkDelete, bulkDnc, guessMapping, importLeads, leadIdsForFilter, type LeadFilter, parseSheet } from "@cloudivoice/core/services/leads";
 import { normalizePhone } from "@cloudivoice/core/phone";
 import { audit } from "@cloudivoice/core/services/audit";
 import { tenant } from "@/lib/session";
@@ -110,4 +111,49 @@ export async function addDncAction(form: FormData) {
     await audit(tx, u.orgId, u.userId, "dnc.added", { type: "dnc", id: e164 });
   }, "leads.edit");
   revalidatePath("/app/lists");
+}
+
+export interface AddLeadState {
+  error?: string;
+  fieldErrors?: Partial<Record<"phone" | "email" | "pincode", string>>;
+  existingId?: string;
+  added?: { id: string; name: string; dnc: boolean };
+  /** Changes on every success so the form can reset itself. */
+  nonce?: number;
+}
+
+export async function addLeadAction(_: AddLeadState, form: FormData): Promise<AddLeadState> {
+  const str = (k: string) => String(form.get(k) ?? "").trim();
+  const custom: Record<string, string> = {};
+  const keys = form.getAll("custom_key").map(String);
+  const values = form.getAll("custom_value").map(String);
+  keys.forEach((k, i) => {
+    const key = k.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40);
+    const v = (values[i] ?? "").trim();
+    if (key && v) custom[key] = v.slice(0, 500);
+  });
+  const listChoice = str("list_id");
+  const res = await tenant(
+    (tx, u) =>
+      addLead(tx, u.orgId, u.userId, {
+        firstName: str("first_name"),
+        lastName: str("last_name"),
+        phone: str("phone"),
+        email: str("email"),
+        city: str("city"),
+        state: str("state"),
+        pincode: str("pincode"),
+        language: str("language"),
+        custom,
+        listId: listChoice && listChoice !== "__new" ? listChoice : null,
+        listName: listChoice === "__new" ? str("list_name") : null,
+      }),
+    "leads.edit",
+  );
+  if (!res.ok) return { error: res.field ? undefined : res.error, fieldErrors: res.field ? { [res.field]: res.error } : undefined, existingId: res.existingId };
+  revalidatePath("/app/leads");
+  if (res.listId) revalidatePath("/app/lists");
+  if (form.get("next") !== "another") redirect(`/app/leads/${res.id}`);
+  const name = [str("first_name"), str("last_name")].filter(Boolean).join(" ") || str("phone");
+  return { added: { id: res.id, name, dnc: res.dnc }, nonce: Date.now() };
 }

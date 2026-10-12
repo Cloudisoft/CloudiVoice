@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setDb, withSystem, withTenant, type Sql } from "../src/db/client";
 import { migrate } from "../src/db/migrate";
 import { getSession, signIn, signUp } from "../src/services/auth";
-import { importLeads, listLeads, resetLeadsForRedial, bulkDnc } from "../src/services/leads";
+import { addDnc, addLead, importLeads, listLeads, resetLeadsForRedial, bulkDnc } from "../src/services/leads";
 import { createCall, finalizeCall, transition, addTranscriptLine } from "../src/services/calls";
 import { saveCampaign } from "../src/services/campaigns";
 import { createAgent } from "../src/services/agents";
@@ -98,6 +98,27 @@ run("database", () => {
       const { rows } = await withTenant(orgA, (tx) => listLeads(tx, { q }));
       expect(rows.map((r) => r.first_name)).toContain("Ravi");
     }
+  });
+
+  it("adds a lead by hand with cleaning, duplicate and DNC checks", async () => {
+    const r = await withTenant(orgA, (tx) => addLead(tx, orgA, userA, { firstName: "Asha", phone: "098765 43219", email: "Asha@Example.com", pincode: "560 001", listName: "Walk-ins", custom: { budget: "50 lakh" } }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const [lead] = await withTenant(orgA, (tx) => tx`select phone_e164, email, pincode, custom, dnc from leads where id = ${r.id}`);
+    expect(lead).toMatchObject({ phone_e164: "+919876543219", email: "asha@example.com", pincode: "560001", custom: { budget: "50 lakh" }, dnc: false });
+    const members = await withTenant(orgA, (tx) => tx`select 1 from lead_list_members m join lead_lists l on l.id = m.list_id where m.lead_id = ${r.id} and l.name = 'Walk-ins'`);
+    expect(members).toHaveLength(1);
+
+    const dup = await withTenant(orgA, (tx) => addLead(tx, orgA, userA, { phone: "+91-98765-43219" }));
+    expect(dup).toMatchObject({ ok: false, field: "phone", existingId: r.id });
+    expect(await withTenant(orgA, (tx) => addLead(tx, orgA, userA, { phone: "12345" }))).toMatchObject({ ok: false, field: "phone" });
+    expect(await withTenant(orgA, (tx) => addLead(tx, orgA, userA, { phone: "9876500001", email: "nope" }))).toMatchObject({ ok: false, field: "email" });
+
+    await withTenant(orgA, (tx) => addDnc(tx, orgA, "9876500002", "asked"));
+    const d = await withTenant(orgA, (tx) => addLead(tx, orgA, userA, { phone: "9876500002" }));
+    expect(d).toMatchObject({ ok: true, dnc: true });
+    // Same number in another organization is a separate lead.
+    expect(await withTenant(orgB, (tx) => addLead(tx, orgB, userA, { phone: "9876543219" }))).toMatchObject({ ok: true });
   });
 
   it("finalizes a never-connected call as No Answer and schedules a retry", async () => {

@@ -336,6 +336,8 @@ textarea {
 .field {
   display: grid;
   gap: 6px;
+  align-content: start; /* never stretch inputs to match a taller neighbour */
+  min-width: 0;
 }
 .field > label,
 .field-label {

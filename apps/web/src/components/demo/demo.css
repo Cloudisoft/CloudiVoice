@@ -64,19 +64,18 @@
 
 .console-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--line);
 }
 .scenario-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  flex: 1;
+  flex: 1 1 260px;
   min-width: 0;
-  mask-image: linear-gradient(90deg, #000 85%, transparent);
 }
 .scenario-tabs::-webkit-scrollbar {
   display: none;
@@ -110,6 +109,17 @@
 }
 .lang-select {
   flex: none;
+  width: 150px;
+  margin-left: auto;
+}
+.lang-select .select {
+  width: 100%;
+  text-overflow: ellipsis;
+}
+@media (max-width: 520px) {
+  .lang-select {
+    width: 100%;
+  }
 }
 .select-compact {
   min-height: 32px;

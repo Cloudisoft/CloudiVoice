@@ -210,7 +210,9 @@ describe("crypto", () => {
     const t = signPayload({ a: 1 }, 60);
     expect(verifyPayload<{ a: number }>(t)?.a).toBe(1);
     const tampered = t.slice(0, -1) + (t.endsWith("A") ? "B" : "A");
-    expect(verifyPayload(tampered)).toBeNull();
+    expect(verifyPayload(tampered)).toBeNull(); // even when only unused encoding bits differ
+    const mid = t.length - 10;
+    expect(verifyPayload(t.slice(0, mid) + (t[mid] === "x" ? "y" : "x") + t.slice(mid + 1))).toBeNull();
     expect(verifyPayload(signPayload({ a: 1 }, -1))).toBeNull();
   });
 });

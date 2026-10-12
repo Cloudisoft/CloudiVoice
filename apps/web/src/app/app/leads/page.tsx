@@ -31,9 +31,14 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
               </a>
             )}
             {canEdit && (
-              <Link href="/app/leads/import" className="btn btn-accent btn-sm">
-                <Icon name="upload" /> Import leads
-              </Link>
+              <>
+                <Link href="/app/leads/new" className="btn btn-ghost btn-sm">
+                  <Icon name="plus" /> Add lead
+                </Link>
+                <Link href="/app/leads/import" className="btn btn-accent btn-sm">
+                  <Icon name="upload" /> Import leads
+                </Link>
+              </>
             )}
           </>
         }
@@ -72,12 +77,17 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
             <EmptyState
               icon="leads"
               title="No leads yet"
-              body="Import a CSV or Excel file. We normalise every number to +91 format, remove duplicates and flag invalid numbers."
+              body="Import a CSV or Excel file, or add contacts one by one. We normalise every number to +91 format, remove duplicates and flag invalid numbers."
               actions={
                 canEdit && (
-                  <Link href="/app/leads/import" className="btn btn-accent btn-sm">
-                    Import leads
-                  </Link>
+                  <>
+                    <Link href="/app/leads/import" className="btn btn-accent btn-sm">
+                      Import leads
+                    </Link>
+                    <Link href="/app/leads/new" className="btn btn-ghost btn-sm">
+                      Add a lead
+                    </Link>
+                  </>
                 )
               }
             />

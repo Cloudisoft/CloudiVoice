@@ -57,8 +57,9 @@ export function signPayload(payload: Record<string, unknown>, ttlSeconds: number
 export function verifyPayload<T extends Record<string, unknown>>(token: string, secret = env.appSecret): T | null {
   const [body, mac] = token.split(".");
   if (!body || !mac) return null;
-  const expected = createHmac("sha256", secret).update(body).digest();
-  const given = Buffer.from(mac, "base64url");
+  // Compare the exact encoded signature (one valid encoding per token).
+  const expected = Buffer.from(createHmac("sha256", secret).update(body).digest("base64url"));
+  const given = Buffer.from(mac);
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
   try {
     const data = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as T & { exp?: number };
