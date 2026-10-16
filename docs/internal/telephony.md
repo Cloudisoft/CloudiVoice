@@ -44,10 +44,12 @@ recording ──► POST /Call/{uuid}/Record/ → callback /telephony/recording 
   (documented range 2000–10000). A transcript-based backup detector also runs.
 - Hangup causes are mapped to neutral end reasons in `mapHangupCause`.
 
-## Transfers
+## Transfers and stream hand-off
 
-- The agent's handoff line plays, and the call is redirected ~350 ms before it ends (`/telephony/transfer-xml` → `<Dial dialMusic="real">`), so the caller hears ringback with no gap.
-- `Dial action` → `/telephony/transfer-result`: if the person answered, the call hangs up when they finish. If nobody answered, the response is a fresh `<Stream>` whose token carries `resume=transfer_failed`; the agent rejoins and offers a callback. Nothing is recorded twice, and transcript times continue.
+- Answer XML is `<Stream keepCallAlive="true">` followed by `<Redirect>` to `/telephony/next`. The redirect runs whenever the agent's stream ends while the line is still up.
+- To transfer (agent tool or Live Monitor): store `calls.transfer_to` / `transfer_caller_id`, move the call to `transferring`, then stop the stream (`DELETE /Call/{uuid}/Stream/`). The voice session also closes its media socket. If the call has no active stream, fall back to the call-transfer API pointing at `/telephony/next`.
+- `/telephony/next` returns `<Dial dialMusic="real">` for a pending transfer. It returns `<Hangup/>` if the conversation ended. Otherwise, for an unexpected stream drop, it reconnects the agent (at most twice; the agent gets the transcript so far).
+- `Dial action` → `/telephony/transfer-result`: answered → hang up when done. Not answered → the agent rejoins and offers a callback.
 
 ## Supervisor listening and barge-in
 

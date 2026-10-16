@@ -14,7 +14,7 @@ import { signPayload, verifyPayload } from "@cloudivoice/core/crypto";
 import { normalizePhone } from "@cloudivoice/core/phone";
 import { getObject } from "@cloudivoice/core/storage";
 import { telephony } from "@cloudivoice/core/telephony";
-import { createCall } from "@cloudivoice/core/services/calls";
+import { addEvent, createCall, transition } from "@cloudivoice/core/services/calls";
 import { dialerTick } from "@cloudivoice/core/services/dialer";
 import { markWebhook, storeWebhook, acquireLease } from "@cloudivoice/core/services/system";
 import { processTelephonyEvent, reconcileCalls, type TelephonyEventKind } from "@cloudivoice/core/services/telephonyEvents";
@@ -81,13 +81,16 @@ async function handleEvent(req: IncomingMessage, res: ServerResponse, kind: Tele
   send(res, 200, "ok");
 }
 
-function streamXml(callId: string, orgId: string, maxSeconds: number, resume?: "transfer_failed") {
+type Resume = "transfer_failed" | "reconnected";
+
+function streamXml(callId: string, orgId: string, maxSeconds: number, resume?: Resume) {
   const adapter = telephony()!;
   const token = signPayload({ kind: "call", callId, orgId, ...(resume ? { resume } : {}) }, 4 * 3600);
   const wsBase = env.voiceUrl.replace(/^http/, "ws");
   return adapter.streamResponse({
     streamUrl: `${wsBase}/media?token=${encodeURIComponent(token)}`,
     statusUrl: `${env.voiceUrl}/telephony/stream-status?callId=${callId}`,
+    nextUrl: `${env.voiceUrl}/telephony/next?callId=${callId}`,
     format: env.telephonyStreamFormat,
     maxSeconds,
     extra: { cv: callId.slice(0, 8) },
@@ -168,6 +171,56 @@ async function handleTransferResult(req: IncomingMessage, res: ServerResponse) {
   return xml(res, streamXml(call.id, call.org_id, 3700, "transfer_failed"));
 }
 
+/**
+ * Runs whenever the agent's audio stream ends while the line is still up:
+ *  - a transfer was requested → dial the person (ringback for the caller);
+ *  - the conversation ended → hang up;
+ *  - the stream dropped unexpectedly → reconnect the agent (at most twice).
+ */
+async function handleNext(req: IncomingMessage, res: ServerResponse) {
+  const { callId } = await intake(req, "answer");
+  const adapter = telephony()!;
+  if (!callId || !/^[0-9a-f-]{36}$/i.test(callId)) return xml(res, adapter.hangupResponse());
+  const [call] = await db()<{
+    id: string;
+    org_id: string;
+    state: string;
+    end_reason: string | null;
+    transfer_status: string | null;
+    transfer_to: string | null;
+    transfer_caller_id: string | null;
+    from_e164: string | null;
+    to_e164: string | null;
+    direction: string;
+  }[]>`select id, org_id, state, end_reason, transfer_status, transfer_to, transfer_caller_id, from_e164, to_e164, direction from calls where id = ${callId}`;
+  if (!call) return xml(res, adapter.hangupResponse());
+
+  if (call.state === "transferring" && call.transfer_to) {
+    const to = normalizePhone(call.transfer_to);
+    if (to) {
+      const callerId = call.transfer_caller_id || (call.direction === "inbound" ? call.to_e164 : call.from_e164) || "";
+      await withTenant(call.org_id, async (tx) => {
+        await tx`update calls set transfer_status = 'dialing' where id = ${call.id}`;
+        await addEvent(tx, call.org_id, call.id, "transfer_dialing", { to: to.e164 });
+      });
+      log.info("transfer dialing", { callId: call.id });
+      return xml(res, adapter.transferResponse({ toE164: to.e164, callerId, actionUrl: `${env.voiceUrl}/telephony/transfer-result?callId=${call.id}` }));
+    }
+  }
+  if (["completed", "failed", "transferred"].includes(call.state) || call.end_reason) return xml(res, adapter.hangupResponse());
+
+  // The agent's stream dropped while the caller is still there: bring the agent back.
+  const reconnects = await withTenant(call.org_id, async (tx) => {
+    const [{ n }] = (await tx<{ n: number }[]>`select count(*)::int as n from call_events where call_id = ${call.id} and type = 'stream_reconnect'`) as unknown as [{ n: number }];
+    if (n < 2) await addEvent(tx, call.org_id, call.id, "stream_reconnect", {});
+    if (call.state === "transferring") await transition(tx, call.id, "in_progress");
+    return n;
+  });
+  if (reconnects >= 2) return xml(res, adapter.hangupResponse());
+  log.warn("agent stream dropped; reconnecting", { callId: call.id });
+  return xml(res, streamXml(call.id, call.org_id, 3700, "reconnected"));
+}
+
 async function handleTransferXml(req: IncomingMessage, res: ServerResponse) {
   const { url } = await intake(req, "answer");
   const to = normalizePhone(url.searchParams.get("to") ?? "");
@@ -214,6 +267,8 @@ const server = createServer(async (req, res) => {
         return await handleEvent(req, res, "recording");
       case "/telephony/stream-status":
         return await handleEvent(req, res, "stream_status");
+      case "/telephony/next":
+        return await handleNext(req, res);
       case "/telephony/transfer-xml":
         return await handleTransferXml(req, res);
       case "/telephony/transfer-result":
@@ -241,7 +296,7 @@ server.on("upgrade", (req, socket, head) => {
   const url = new URL(req.url ?? "/", "http://x");
   const token = url.searchParams.get("token") ?? "";
   if (url.pathname === "/media") {
-    const claims = verifyPayload<{ kind: string; callId: string; orgId: string; resume?: "transfer_failed" }>(token);
+    const claims = verifyPayload<{ kind: string; callId: string; orgId: string; resume?: "transfer_failed" | "reconnected" }>(token);
     if (!claims || claims.kind !== "call") return socket.destroy();
     wss.handleUpgrade(req, socket, head, (ws) => handlePhoneStream(ws, { callId: claims.callId, orgId: claims.orgId, resume: claims.resume }));
     return;

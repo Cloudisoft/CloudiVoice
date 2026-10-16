@@ -33,14 +33,27 @@ export async function superviseAction(form: FormData): Promise<{ message: string
       const to = normalizePhone(String(form.get("to") ?? ""));
       if (!to) return { message: "Enter a valid number to transfer to." };
       const callerId = (call.direction === "inbound" ? call.to_e164 : call.from_e164) ?? "";
-      await withTenant(user.orgId, async (tx) => {
-        await transition(tx, id, "transferring");
-        await tx`update calls set transfer_status = 'requested' where id = ${id}`;
+      const moved = await withTenant(user.orgId, async (tx) => {
+        const ok = await transition(tx, id, "transferring");
+        if (!ok) return false;
+        await tx`update calls set transfer_status = 'requested', transfer_to = ${to.e164}, transfer_caller_id = ${callerId || null} where id = ${id}`;
         await addEvent(tx, user.orgId, id, "supervisor_transfer", { to: to.e164, by: user.userId });
         await audit(tx, user.orgId, user.userId, "call.transferred_by_supervisor", { type: "call", id });
+        return true;
       });
-      await adapter.transfer(call.provider_call_id, to.e164, callerId, id);
-      return { message: `Transferring to ${to.e164}…` };
+      if (!moved) return { message: "This call can’t be transferred right now (it may have just ended or already be transferring)." };
+      // Ends the agent's stream; the call then dials the number with a ringback for the caller.
+      try {
+        await adapter.transfer(call.provider_call_id, id);
+      } catch (e) {
+        await withTenant(user.orgId, async (tx) => {
+          await tx`update calls set transfer_status = 'failed', transfer_to = null where id = ${id}`;
+          await transition(tx, id, "in_progress");
+        });
+        if (e instanceof TelephonyError && e.status === 404) return { message: "This call has already ended." };
+        throw e;
+      }
+      return { message: `Transferring to ${to.e164}… the caller hears ringing until they pick up.` };
     }
   } catch (e) {
     return { message: e instanceof TelephonyError ? e.customerMessage : "The action couldn’t be completed." };

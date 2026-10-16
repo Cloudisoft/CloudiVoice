@@ -49,7 +49,12 @@ export interface TelephonyAdapter {
   readonly key: string;
   placeCall(input: PlaceCallInput): Promise<PlacedCall>;
   hangup(providerCallId: string): Promise<void>;
-  transfer(providerCallId: string, toE164: string, callerId: string, callId: string): Promise<void>;
+  /**
+   * Hand a live call over. The caller must already have stored the target on
+   * the call (transfer_to); this ends the agent's audio stream so the call
+   * continues to the "next" step, which dials the target.
+   */
+  transfer(providerCallId: string, callId: string): Promise<void>;
   getCallStatus(providerCallId: string): Promise<CallStatusReport>;
   listNumbers(): Promise<CarrierNumber[]>;
   searchNumbers(query: { countryIso: string; pattern?: string; type?: string }): Promise<AvailableNumber[]>;
@@ -62,7 +67,8 @@ export interface TelephonyAdapter {
   /** Map a carrier hangup payload to a neutral end reason. */
   endReasonFromWebhook(params: Record<string, string>): EndReason;
   /** Build the XML document that connects an answered call to our media stream. */
-  streamResponse(opts: { streamUrl: string; statusUrl: string; format: "mulaw-8k" | "l16-16k"; maxSeconds: number; extra: Record<string, string> }): string;
+  /** Stream the call to the agent; when the stream ends, fetch `nextUrl` for what happens next. */
+  streamResponse(opts: { streamUrl: string; statusUrl: string; nextUrl: string; format: "mulaw-8k" | "l16-16k"; maxSeconds: number; extra: Record<string, string> }): string;
   /** Build the XML that bridges the caller to a human. */
   transferResponse(opts: { toE164: string; callerId: string; actionUrl: string }): string;
   /** XML for a short spoken message followed by hangup (e.g. outside hours). */

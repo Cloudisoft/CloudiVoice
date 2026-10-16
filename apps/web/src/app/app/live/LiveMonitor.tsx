@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { superviseAction } from "./actions";
-import { PendingButton } from "@/components/ui/form";
 import { useCallMonitor } from "./useCallMonitor";
 
 interface LiveCall {
@@ -52,6 +51,52 @@ function Meters({ levels }: { levels: React.RefObject<Record<"caller" | "agent" 
           </i>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Transfer / End for a live call. Each button sends its own action explicitly. */
+function SuperviseControls({ callId, canTransfer, onMessage }: { callId: string; canTransfer: boolean; onMessage: (m: string) => void }) {
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState<null | "transfer" | "end">(null);
+  const run = async (op: "transfer" | "end") => {
+    if (op === "end" && !confirm("End this call now?")) return;
+    if (op === "transfer" && !to.trim()) return onMessage("Enter the number to transfer to.");
+    const fd = new FormData();
+    fd.set("id", callId);
+    fd.set("op", op);
+    if (op === "transfer") fd.set("to", to);
+    setBusy(op);
+    try {
+      onMessage((await superviseAction(fd)).message);
+    } catch {
+      onMessage("That didn’t go through — please try again.");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="form-actions">
+      {canTransfer && (
+        <>
+          <input
+            className="input"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void run("transfer")}
+            placeholder="Transfer to number"
+            inputMode="tel"
+            aria-label="Transfer to number"
+            style={{ maxWidth: 200, minHeight: 34, height: 34 }}
+          />
+          <button type="button" className="btn btn-ghost btn-sm" disabled={busy !== null} aria-busy={busy === "transfer" || undefined} onClick={() => void run("transfer")}>
+            Transfer
+          </button>
+        </>
+      )}
+      <button type="button" className="btn btn-danger btn-sm" disabled={busy !== null} aria-busy={busy === "end" || undefined} onClick={() => void run("end")}>
+        End call
+      </button>
     </div>
   );
 }
@@ -233,28 +278,7 @@ export function LiveMonitor({ canSupervise, canTransfer }: { canSupervise: boole
                 </div>
               )}
               {msg && <div className="notice" style={{ marginTop: 10 }}>{msg}</div>}
-              {canSupervise && current && (
-                <form
-                  className="form-actions"
-                  action={async (fd) => {
-                    const r = await superviseAction(fd);
-                    setMsg(r.message);
-                  }}
-                >
-                  <input type="hidden" name="id" value={current.id} />
-                  {canTransfer && (
-                    <>
-                      <input name="to" className="input" placeholder="Transfer to number" inputMode="tel" aria-label="Transfer to number" style={{ maxWidth: 200, minHeight: 34, height: 34 }} />
-                      <PendingButton className="btn btn-ghost btn-sm" name="op" value="transfer">
-                        Transfer
-                      </PendingButton>
-                    </>
-                  )}
-                  <PendingButton className="btn btn-danger btn-sm" name="op" value="end" onClick={(e) => !confirm("End this call now?") && e.preventDefault()}>
-                    End call
-                  </PendingButton>
-                </form>
-              )}
+              {canSupervise && current && <SuperviseControls callId={current.id} canTransfer={canTransfer} onMessage={setMsg} />}
             </>
           )}
         </div>

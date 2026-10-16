@@ -245,3 +245,17 @@ describe("name placeholders", () => {
   });
 });
 
+describe("call handover", () => {
+  it("continues to the next step when the agent's stream ends", async () => {
+    const { PrimaryCarrierAdapter } = await import("../src/telephony/adapters/plivo");
+    const a = new PrimaryCarrierAdapter("id", "token", "https://voice.example.com");
+    const x = a.streamResponse({ streamUrl: "wss://voice.example.com/media?token=t", statusUrl: "https://voice.example.com/s", nextUrl: "https://voice.example.com/telephony/next?callId=c1", format: "mulaw-8k", maxSeconds: 3600, extra: {} });
+    expect(x).toMatch(/keepCallAlive="true"/);
+    expect(x.indexOf("</Stream>")).toBeLessThan(x.indexOf("<Redirect"));
+    expect(x).toContain('<Redirect method="POST">https://voice.example.com/telephony/next?callId=c1</Redirect>');
+    const d = a.transferResponse({ toE164: "+918866819132", callerId: "+918065584934", actionUrl: "https://voice.example.com/r" });
+    expect(d).toContain("<Number>918866819132</Number>");
+    expect(d).toContain('dialMusic="real"');
+  });
+});
+

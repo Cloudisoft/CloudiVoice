@@ -5,7 +5,7 @@ import { bytesToPcm16, mulawToPcm16 } from "@cloudivoice/core/audio";
 import { type ToolHost, type ToolName } from "@cloudivoice/core/brain";
 import { withTenant } from "@cloudivoice/core/db/client";
 import { env } from "@cloudivoice/core/env";
-import { phoneForSpeech } from "@cloudivoice/core/phone";
+import { normalizePhone, phoneForSpeech } from "@cloudivoice/core/phone";
 import { addEvent, addTranscriptLine, transition } from "@cloudivoice/core/services/calls";
 import { scheduleCallback } from "@cloudivoice/core/services/callbacks";
 import { addDnc } from "@cloudivoice/core/services/leads";
@@ -25,8 +25,11 @@ const VOICEMAIL_GREETING =
 interface CallSetup {
   orgId: string;
   callId: string;
-  /** Reconnected to the agent because the person we transferred to didn't answer. */
-  resume?: "transfer_failed";
+  /**
+   * The agent rejoins an ongoing call: the person we transferred to didn't
+   * answer, or the agent's audio link dropped and was restored.
+   */
+  resume?: "transfer_failed" | "reconnected";
 }
 
 /**
@@ -99,14 +102,26 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
     };
     let opening = openingLine(data.config, ctx);
     if (data.org.record_calls && data.config.recording_disclosure) opening = `${data.org.recording_disclosure} ${opening}`;
-    if (setup.resume === "transfer_failed") {
-      // Back from an unanswered transfer: no new greeting, no recording restart.
+    let history = "";
+    if (setup.resume) {
+      // Rejoining the same call: no new greeting, no recording restart, and the
+      // agent knows what was already said.
+      const hi = data.config.primary_language === "hi-IN";
       opening =
-        data.config.primary_language === "hi-IN"
-          ? "माफ़ कीजिए, अभी हमारी team से कोई उपलब्ध नहीं है। क्या मैं आपके लिए callback schedule कर दूँ?"
-          : "I'm sorry, nobody from the team could pick up right now. Shall I schedule a callback for you?";
+        setup.resume === "transfer_failed"
+          ? hi
+            ? "माफ़ कीजिए, अभी हमारी team से कोई उपलब्ध नहीं है। क्या मैं आपके लिए callback schedule कर दूँ?"
+            : "I'm sorry, nobody from the team could pick up right now. Shall I schedule a callback for you?"
+          : hi
+            ? "माफ़ कीजिए, line थोड़ी देर के लिए कट गई थी। जी, बताइए?"
+            : "Sorry about that, the line dropped for a moment. Please go on.";
       if (data.call.answered_at) atOffsetMs = Date.now() - new Date(data.call.answered_at).getTime();
-      void persist((tx) => tx`update calls set transfer_status = coalesce(transfer_status, 'failed') where id = ${setup.callId}`);
+      if (setup.resume === "transfer_failed") void persist((tx) => tx`update calls set transfer_status = 'failed', transfer_to = null where id = ${setup.callId} and transfer_status <> 'transferred'`);
+      const lines = await withTenant(setup.orgId, (tx) => tx<{ speaker: string; text: string }[]>`
+        select speaker, text from (select id, speaker, text from transcript_lines where call_id = ${setup.callId} order by id desc limit 30) t order by id`).catch(() => []);
+      if (lines.length) {
+        history = `\n\n# Conversation so far on this call\n${lines.map((l) => `${l.speaker.toUpperCase()}: ${l.text}`).join("\n")}\nContinue from here naturally. Don't greet or introduce yourself again, and don't repeat questions already answered.`;
+      }
     }
     const voicemailText = fillTemplate(data.cp?.voicemail_message || data.config.voicemail_message || "", templateVars(data.config, ctx));
 
@@ -184,7 +199,7 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
       onSupervisorEvent: (type, payload) => void persist((tx) => addEvent(tx, setup.orgId, setup.callId, type, payload)),
     });
     conv = new Conversation({
-      system: buildSystemPrompt(data.config, ctx) + (data.lead ? `\nCaller's number for read-back: ${phoneForSpeech(data.lead.phone_e164)}` : ""),
+      system: buildSystemPrompt(data.config, ctx) + (data.lead ? `\nCaller's number for read-back: ${phoneForSpeech(data.lead.phone_e164)}` : "") + history,
       opening,
       language: data.config.primary_language,
       voice: data.config.voice,
@@ -217,24 +232,32 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
         onTool: (t) => void persist((tx) => addEvent(tx, setup.orgId, setup.callId, "tool", { name: t.name, input: t.input, result: t.result.slice(0, 500), is_error: t.isError })),
         onTransfer: async () => {
           const adapter = telephony();
-          if (!adapter || !providerCallId || !transferNumber) return false;
+          const target = normalizePhone(transferNumber)?.e164;
+          if (!adapter || !providerCallId || !target) return false;
           transferring = true;
-          try {
-            await persist(async (tx) => {
-              await transition(tx, setup.callId, "transferring");
-              await tx`update calls set transfer_status = 'requested' where id = ${setup.callId}`;
-            });
-            await adapter.transfer(providerCallId, transferNumber, callerId, setup.callId);
-            return true;
-          } catch (e) {
+          const moved = await withTenant(setup.orgId, async (tx) => {
+            const ok = await transition(tx, setup.callId, "transferring");
+            if (ok) {
+              await tx`update calls set transfer_status = 'requested', transfer_to = ${target}, transfer_caller_id = ${callerId || null} where id = ${setup.callId}`;
+              await addEvent(tx, setup.orgId, setup.callId, "transfer_requested", { to: target, by: "agent" });
+            }
+            return ok;
+          }).catch((e) => {
+            log.error("transfer persist failed", { callId: setup.callId, err: String(e) });
+            return false;
+          });
+          if (!moved) {
             transferring = false;
-            log.error("transfer failed", { callId: setup.callId, err: String(e) });
-            await persist(async (tx) => {
-              await tx`update calls set transfer_status = 'failed' where id = ${setup.callId}`;
-              await transition(tx, setup.callId, "in_progress");
-            });
             return false;
           }
+          // Ending the agent's stream moves the call on to the dialling step.
+          try {
+            await adapter.transfer(providerCallId, setup.callId);
+          } catch (e) {
+            log.warn("stream stop via API failed; closing the stream directly", { callId: setup.callId, err: String(e) });
+          }
+          setTimeout(() => ws.readyState === ws.OPEN && ws.close(), 1200);
+          return true;
         },
         onEnd: (kind: EndKind) => {
           live?.close();
@@ -295,11 +318,22 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
         break;
       }
       case "stop":
-        // The stream also stops when the call is bridged to a person.
-        conv?.finish(transferring ? "transferred" : "caller_hung_up");
+        void streamEnded();
         break;
     }
   });
-  ws.on("close", () => conv?.finish(transferring ? "transferred" : "caller_hung_up"));
+  ws.on("close", () => void streamEnded());
+
+  /** The stream ended: the caller hung up, or the call is being handed to a person. */
+  async function streamEnded() {
+    if (!conv || conv.isEnded) return;
+    let handover = transferring;
+    if (!handover) {
+      // A supervisor may have started the transfer from the Live Monitor.
+      const [c] = await withTenant(setup.orgId, (tx) => tx<{ state: string }[]>`select state from calls where id = ${setup.callId}`).catch(() => []);
+      handover = c?.state === "transferring";
+    }
+    conv.finish(handover ? "transferred" : "caller_hung_up");
+  }
   ws.on("error", (e) => log.warn("media socket error", { callId: setup.callId, err: String(e) }));
 }

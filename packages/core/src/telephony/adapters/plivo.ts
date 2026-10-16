@@ -168,11 +168,25 @@ export class PrimaryCarrierAdapter implements TelephonyAdapter {
     }
   }
 
-  async transfer(providerCallId: string, toE164: string, callerId: string, callId: string) {
-    const url = `${this.answerBaseUrl}/telephony/transfer-xml?callId=${encodeURIComponent(callId)}&to=${encodeURIComponent(toE164)}&from=${encodeURIComponent(callerId)}`;
+  /** Stop the agent's audio stream(s) on a call. False if the call has no active stream. */
+  async stopStream(providerCallId: string): Promise<boolean> {
+    try {
+      await this.api("DELETE", `/Call/${encodeURIComponent(providerCallId)}/Stream/`);
+      return true;
+    } catch (e) {
+      if (e instanceof TelephonyError && e.status === 404) return false;
+      throw e;
+    }
+  }
+
+  async transfer(providerCallId: string, callId: string) {
+    // The answer XML continues with a <Redirect> once the stream ends, so
+    // stopping the stream moves the call straight to the dialling step.
+    if (await this.stopStream(providerCallId)) return;
+    // No stream on the call (e.g. it already ended): redirect it explicitly.
     await this.api("POST", `/Call/${encodeURIComponent(providerCallId)}/`, {
       legs: "aleg",
-      aleg_url: url,
+      aleg_url: `${this.answerBaseUrl}/telephony/next?callId=${encodeURIComponent(callId)}`,
       aleg_method: "POST",
     });
   }
@@ -300,7 +314,7 @@ export class PrimaryCarrierAdapter implements TelephonyAdapter {
     return mapHangupCause(params);
   }
 
-  streamResponse(opts: { streamUrl: string; statusUrl: string; format: "mulaw-8k" | "l16-16k"; maxSeconds: number; extra: Record<string, string> }) {
+  streamResponse(opts: { streamUrl: string; statusUrl: string; nextUrl: string; format: "mulaw-8k" | "l16-16k"; maxSeconds: number; extra: Record<string, string> }) {
     const contentType = opts.format === "l16-16k" ? "audio/x-l16;rate=16000" : "audio/x-mulaw;rate=8000";
     const extra = Object.entries(opts.extra)
       .map(([k, v]) => `${k}=${v}`)
@@ -308,6 +322,7 @@ export class PrimaryCarrierAdapter implements TelephonyAdapter {
     return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Stream bidirectional="true" keepCallAlive="true" audioTrack="inbound" contentType="${contentType}" streamTimeout="${opts.maxSeconds}" noiseCancellation="true" noiseCancellationLevel="70" statusCallbackUrl="${xmlEscape(opts.statusUrl)}" statusCallbackMethod="POST" extraHeaders="${xmlEscape(extra)}">${xmlEscape(opts.streamUrl)}</Stream>
+  <Redirect method="POST">${xmlEscape(opts.nextUrl)}</Redirect>
 </Response>`;
   }
 
