@@ -107,8 +107,8 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
     if (setup.resume) {
       // Rejoining the same call: no new greeting, no recording restart, and the
       // agent knows what was already said.
-      const lines = phrases(data.config.primary_language, voiceGender(data.config.voice));
-      opening = setup.resume === "transfer_failed" ? lines.transferFailed : lines.reconnected;
+      const engineLines = phrases(data.config.primary_language, voiceGender(data.config.voice));
+      opening = setup.resume === "transfer_failed" ? engineLines.transferFailed : engineLines.reconnected;
       if (data.call.answered_at) atOffsetMs = Date.now() - new Date(data.call.answered_at).getTime();
       if (setup.resume === "transfer_failed") void persist((tx) => tx`update calls set transfer_status = 'failed', transfer_to = null where id = ${setup.callId} and transfer_status <> 'transferred'`);
       const lines = await withTenant(setup.orgId, (tx) => tx<{ speaker: string; text: string }[]>`

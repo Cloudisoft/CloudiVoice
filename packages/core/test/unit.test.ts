@@ -278,7 +278,7 @@ describe("regional languages", () => {
   });
 
   it("opens in the agent's own language with the right gender", () => {
-    const ctx = { direction: "outbound" as const, lead: { first_name: "Ramesh" }, timezone: "Asia/Kolkata" };
+    const ctx = { direction: "outbound" as const, lead: { first_name: "Ramesh" }, timezone: "Asia/Kolkata", canTransfer: false };
     const pa = (voice: string) => openingLine(parseAgentConfig({ primary_language: "pa-IN", voice, use_case: "sales", company_name: "Acme", persona_name: "Simran" }), ctx);
     expect(pa("priya")).toMatch(/Ramesh.*ਬੋਲ ਰਹੀ ਹਾਂ/);
     expect(pa("aditya")).toMatch(/ਬੋਲ ਰਿਹਾ ਹਾਂ/);
@@ -288,7 +288,7 @@ describe("regional languages", () => {
   });
 
   it("tells regional agents to stay in their script", () => {
-    const p = buildSystemPrompt(parseAgentConfig({ primary_language: "gu-IN", company_name: "Acme" }), { direction: "inbound", timezone: "Asia/Kolkata" });
+    const p = buildSystemPrompt(parseAgentConfig({ primary_language: "gu-IN", company_name: "Acme" }), { direction: "inbound", timezone: "Asia/Kolkata", canTransfer: false });
     expect(p).toContain("ONLY in Gujarati script");
   });
 });
