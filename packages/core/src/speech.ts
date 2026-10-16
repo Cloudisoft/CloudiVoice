@@ -30,13 +30,14 @@ export interface Transcript {
 export async function transcribe(
   pcm: Int16Array,
   sampleRate: number,
-  opts: { language?: string; signal?: AbortSignal } = {},
+  opts: { language?: string; signal?: AbortSignal; keyterms?: string[] } = {},
 ): Promise<Transcript> {
   const form = new FormData();
   const wav = pcm16ToWav(pcm, sampleRate);
   form.append("file", new Blob([wav as BlobPart], { type: "audio/wav" }), "utterance.wav");
   form.append("model", env.sttModel);
-  form.append("mode", "transcribe");
+  form.append("mode", env.sttMode);
+  if (opts.keyterms?.length && env.sttModel.startsWith("saaras:v4")) form.append("keyterms", JSON.stringify(opts.keyterms.slice(0, 50)));
   form.append("language_code", opts.language ?? "unknown");
   const res = await fetch(`${env.speechApiBase}/speech-to-text`, {
     method: "POST",

@@ -207,7 +207,10 @@ async function handleNext(req: IncomingMessage, res: ServerResponse) {
       return xml(res, adapter.transferResponse({ toE164: to.e164, callerId, actionUrl: `${env.voiceUrl}/telephony/transfer-result?callId=${call.id}` }));
     }
   }
-  if (["completed", "failed", "transferred"].includes(call.state) || call.end_reason) return xml(res, adapter.hangupResponse());
+  if (["completed", "failed", "transferred"].includes(call.state) || call.end_reason) {
+    await withTenant(call.org_id, (tx) => addEvent(tx, call.org_id, call.id, "next_step", { action: "hangup", state: call.state })).catch(() => {});
+    return xml(res, adapter.hangupResponse());
+  }
 
   // The agent's stream dropped while the caller is still there: bring the agent back.
   const reconnects = await withTenant(call.org_id, async (tx) => {

@@ -52,6 +52,47 @@ export function openingLine(cfg: AgentConfig, ctx: CallContext): string {
   return line;
 }
 
+/** "SnyderStaffing" → "Snyder Staffing" (how people say it). */
+function spoken(name: string) {
+  return name.replace(/([a-z])([A-Z])/g, "$1 $2").trim();
+}
+
+/**
+ * Names and terms likely to be said on this call, used to bias speech
+ * recognition (up to 50): company, agent, the person, their city and custom
+ * fields, the agent's vocabulary list and brand-like terms from the script.
+ */
+export function callKeyterms(cfg: AgentConfig, ctx: CallContext): string[] {
+  const out: string[] = [];
+  const add = (t?: string | null) => {
+    const v = (t ?? "").replace(/\s+/g, " ").trim();
+    if (v.length >= 2 && v.length <= 64 && !out.some((x) => x.toLowerCase() === v.toLowerCase())) out.push(v);
+  };
+  add(spoken(cfg.company_name));
+  add(cfg.company_name);
+  add(ctx.introName || cfg.persona_name);
+  const lead = ctx.lead;
+  if (lead) {
+    add([lead.first_name, lead.last_name].filter(Boolean).join(" "));
+    add(lead.first_name);
+    add(lead.last_name);
+    add(lead.city);
+    for (const v of Object.values(lead.custom ?? {})) if (v && v.length <= 40) add(v);
+  }
+  for (const v of cfg.vocabulary.split(/[,\n]/)) add(v);
+  // Brand/product-like terms from the script: acronyms (CRM, SEO) and brand-style
+  // words with inner capitals (WhatsApp, SnyderStaffing). Ordinary words are skipped.
+  const counts = new Map<string, number>();
+  const body = cfg.instructions.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+  for (const m of body.matchAll(/\b(?:[A-Z]{2,6}|[A-Z]?[a-z]+[A-Z][A-Za-z]+)\b/g)) {
+    const t = m[0];
+    if (/^(SOP|FAQ|ETA|OK|PS|NB|IE|EG)$/.test(t)) continue;
+    counts.set(t, (counts.get(t) ?? 0) + 1);
+  }
+  [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20).forEach(([t]) => add(t));
+  return out.slice(0, 50);
+}
+
 function formatNow(ctx: CallContext) {
   const tz = ctx.timezone ?? "Asia/Kolkata";
   const now = ctx.now ?? new Date();
@@ -133,6 +174,9 @@ Current date and time for the caller: ${formatNow(ctx)}. Use it silently to turn
 - Handle Indian names, cities and places naturally; if unsure how to say a name, use it as written.
 
 # Listening rules
+- Phone-line speech recognition sometimes mishears names. Names likely on this call: ${callKeyterms(cfg, ctx).slice(0, 12).join(", ")}. If the caller says something that sounds similar (e.g. "${spoken(cfg.company_name).split(" ")[0]}" heard as a different but similar word), assume they mean that name — never repeat a garbled version back as if it were right.
+- Capturing details: for an email, ask them to spell the part before "@" slowly, then read the whole address back letter by letter and wait for a yes. Read phone numbers back in groups. Confirm the spelling of names you haven't heard before. Never save a detail the caller didn't confirm.
+- When the caller is giving an email, a number or spelling something, stay quiet until they've clearly finished — don't jump in after each word.
 - Your earlier reply may end with "—": that means the caller cut you off there. Don't restart or repeat it; respond to what the caller just said, and only bring the point back if it still matters.
 - Speech recognition on phone lines can mishear. If the caller's words seem garbled, cut off, or don't fit the conversation, don't guess wildly: politely ask them to repeat ("माफ़ कीजिए, आवाज़ थोड़ी कट गई, क्या आप दोबारा बताएँगे?").
 - Short fillers ("haan", "hmm", "ok", "uh huh", "yeah") are acknowledgements, not new requests. Do not restart your answer for them.
@@ -144,7 +188,7 @@ Current date and time for the caller: ${formatNow(ctx)}. Use it silently to turn
 # Ending, transferring, compliance
 - Never end the call in the middle of a conversation. Only use end_call after a clear goodbye, a polite disqualification, or when the caller asks to end.
 - When the caller is wrapping up ("bye", "thank you, that's all", "बस इतना ही", "ठीक है, रखता/रखती हूँ"), give one short warm goodbye with any next step and call end_call in the same reply. Don't ask another question.
-- ${ctx.canTransfer ? "If the caller asks for a human, a person, or a manager, say ONE short sentence and call transfer_to_human in the same reply. Do not ask another question first." : "If the caller asks for a human, apologise that nobody is available right now, offer to schedule a callback, and use schedule_callback if they agree."}
+- ${ctx.canTransfer ? "Transfer immediately — say ONE short sentence and call transfer_to_human in the same reply — whenever the caller asks for a human, a person, a manager or 'the team', OR wants to talk/consult/discuss right now (e.g. \"अभी करवा दो\", \"abhi baat karao\", \"connect me\", \"can I speak to someone now\"). Don't ask more questions or collect details first; the team will take it from there. Never say a transfer is done until it happens." : "If the caller asks for a human, apologise that nobody is available right now, offer to schedule a callback, and use schedule_callback if they agree."}
 - If the caller asks not to be called again, apologise, confirm, and call add_to_dnc, then end politely.
 - Polite disqualification: thank them warmly, explain briefly, and end the call.
 - Never invent prices, policies, availability or facts. ${cfg.knowledge_enabled ? "Use lookup_knowledge for company information; if it has no answer, say a team member will follow up." : "If you do not know, say a team member will follow up."}

@@ -69,6 +69,8 @@ export interface ConversationOptions {
   synthesizer?: Synthesizer;
   /** Play short cached fillers when a reply needs a moment (default on). */
   fillers?: boolean;
+  /** Names and terms likely on this call, to help recognition. */
+  keyterms?: string[];
 }
 
 /** Backchannels and acknowledgements: never a reason to stop talking. */
@@ -80,9 +82,16 @@ const TRAILING = /(\b(and|but|so|because|or|that|the|to|like|um+|uh+)|और|ल
 const GOODBYE = /(\b(bye|goodbye|bye bye|good night)\b|बाय|अलविदा|टाटा|गुड बाय|रखता हूँ|रखती हूँ|फ़ोन रखत|फोन रखत)/i;
 const ACK_PREFIX = /^(जी हाँ|जी|हाँ जी|अच्छा|ठीक है|okay|ok|sure|alright|right|got it)[,!।.]\s+/i;
 
-const EARLY_FINALIZE_MS = 220; // pause that triggers an early transcript
+const EARLY_FINALIZE_MS = 220; // pause that triggers an early transcript (reply starts preparing)
 const HESITANT_FINALIZE_MS = 700; // ... when the caller sounded unfinished
-const FILLER_AFTER_MS = 380; // play a filler if the reply isn't audible by then
+const DICTATION_FINALIZE_MS = 900; // ... while they're giving an email/number/spelling
+// The reply is prepared early but only *spoken* once the caller has really stopped:
+const SPEAK_AFTER_SILENCE_MS = 550;
+const SPEAK_AFTER_HESITANT_MS = 1000;
+const SPEAK_AFTER_DICTATION_MS = 1400;
+const FILLER_AFTER_MS = 380; // a filler may play if the reply isn't ready once the caller is done
+/** The agent just asked for something people dictate in pieces. */
+const DICTATION = /(e-?mail|ईमेल|मेल|spell|स्पेल|spelling|number|नंबर|नम्बर|mobile|मोबाइल|phone|फ़ोन|फोन|pin ?code|पिन|address|पता|account|आईडी|\bID\b|digits?|अंक|नाम (क्या|बता))/i;
 const BARGE_VOICED_MS = 650; // sustained speech that interrupts regardless of words
 const REASK_MIN_VOICED_MS = 550; // only re-ask for real speech we couldn't read
 
@@ -153,6 +162,8 @@ interface Turn {
   realAudio: boolean;
   fillerPlayed: boolean;
   fillerTimer: NodeJS.Timeout | null;
+  /** Caller silence required before the agent starts speaking. */
+  speakAfterMs: number;
 }
 
 export class Conversation {
@@ -182,6 +193,9 @@ export class Conversation {
   private textChain: Promise<void> = Promise.resolve();
   private bargeAt: number | null = null;
   private turnStartedAt = 0;
+  private lastVoicedAt = 0;
+  private dictation = false;
+  private lastHesitant = false;
   private lastPartial = "";
 
   constructor(private readonly o: ConversationOptions) {
@@ -238,6 +252,7 @@ export class Conversation {
           this.openSegment(ev.preroll);
           break;
         case "audio":
+          if (ev.voiced) this.lastVoicedAt = Date.now();
           if (ev.voiced && !this.segActive) {
             // The caller kept talking after a short pause: new segment, and
             // whatever reply was being prepared is no longer right.
@@ -247,7 +262,7 @@ export class Conversation {
             this.segFrames.push(ev.pcm);
             if (ev.voiced) this.segVoicedMs += (ev.pcm.length / this.o.inputSampleRate) * 1000;
             this.o.transcriber?.push(ev.pcm);
-            const wait = this.segHesitant ? HESITANT_FINALIZE_MS : EARLY_FINALIZE_MS;
+            const wait = this.dictation ? DICTATION_FINALIZE_MS : this.segHesitant ? HESITANT_FINALIZE_MS : EARLY_FINALIZE_MS;
             if (this.o.transcriber && !ev.voiced && ev.silenceMs >= wait && this.segVoicedMs >= 200) this.finalizeSegment();
           }
           if (this.bargeAt !== null && ev.voiced && ev.speechMs - this.bargeAt >= BARGE_VOICED_MS) this.interrupt();
@@ -304,6 +319,7 @@ export class Conversation {
   }
 
   private finalizeSegment() {
+    this.lastHesitant = this.segHesitant;
     const frames = this.segFrames;
     const voicedMs = this.segVoicedMs;
     const atMs = this.segStartMs;
@@ -313,7 +329,7 @@ export class Conversation {
     const rate = this.o.inputSampleRate;
     const t0 = Date.now();
     const result: Promise<Transcript | null> = (tr ? tr.finalize() : Promise.resolve(null))
-      .then((t) => t ?? transcribeSegment(concatPcm(frames), rate))
+      .then((t) => t ?? transcribeSegment(concatPcm(frames), rate, this.o.keyterms))
       .catch((e) => {
         this.o.hooks.onError?.(e);
         return null;
@@ -361,18 +377,40 @@ export class Conversation {
   // -------------------------------------------------------------------------
 
   private startTurn(text: string) {
-    const turn: Turn = { abort: new AbortController(), realAudio: false, fillerPlayed: false, fillerTimer: null };
+    const speakAfterMs = this.dictation ? SPEAK_AFTER_DICTATION_MS : this.lastHesitant ? SPEAK_AFTER_HESITANT_MS : SPEAK_AFTER_SILENCE_MS;
+    const turn: Turn = { abort: new AbortController(), realAudio: false, fillerPlayed: false, fillerTimer: null, speakAfterMs };
     this.turn = turn;
     this.turnStartedAt = Date.now();
     this.setStatus("processing");
-    if (this.o.fillers !== false) {
+    // No "जी…" while someone is dictating an email or number — it sounds like cutting in.
+    if (this.o.fillers !== false && !this.dictation) {
       turn.fillerTimer = setTimeout(() => void this.playFiller(turn), FILLER_AFTER_MS);
     }
     void this.runTurn(turn, text);
   }
 
+  /** Milliseconds since the caller last made a sound. */
+  private callerSilentMs() {
+    return this.lastVoicedAt ? Date.now() - this.lastVoicedAt : Number.POSITIVE_INFINITY;
+  }
+
+  /** Wait until the caller has been quiet long enough to start talking. False if the turn was dropped. */
+  private async waitForCallerSilence(turn: Turn) {
+    while (this.callerSilentMs() < turn.speakAfterMs) {
+      if (turn.abort.signal.aborted || this.ended || this.turn !== turn) return false;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    return !turn.abort.signal.aborted && !this.ended;
+  }
+
   private async playFiller(turn: Turn) {
     if (this.turn !== turn || turn.realAudio || turn.abort.signal.aborted || turn.fillerPlayed) return;
+    // Only once the caller is clearly done, and a little after, so it never cuts in.
+    const wait = turn.speakAfterMs + 150 - this.callerSilentMs();
+    if (wait > 0) {
+      turn.fillerTimer = setTimeout(() => void this.playFiller(turn), wait);
+      return;
+    }
     const set = await loadFillers(this.lastLanguage, this.o.voice, this.o.pace, this.o.sink.sampleRate);
     if (!set.length || this.turn !== turn || turn.realAudio || turn.abort.signal.aborted) return;
     const pcm = set[this.fillerIdx++ % set.length]!;
@@ -406,6 +444,9 @@ export class Conversation {
     if (turn.fillerTimer) clearTimeout(turn.fillerTimer);
     if (signal.aborted || this.turn !== turn) return;
     this.turn = null;
+    // Did the agent just ask for something people dictate (email, number, spelling)?
+    const lastAsk = spokenReply.slice(-220);
+    this.dictation = /[?？]/.test(lastAsk) && DICTATION.test(lastAsk);
     // The caller said bye and the agent said goodbye without asking anything: hang up
     // like a person would, instead of waiting on a silent line.
     if (!control && GOODBYE.test(text) && !/[?？]/.test(spokenReply)) control = "end_call";
@@ -519,6 +560,7 @@ export class Conversation {
         await new Promise<void>((r) => (wake = r));
         continue;
       }
+      if (turn && !turn.realAudio && !turn.fillerPlayed && !(await this.waitForCallerSilence(turn))) break;
       const atMs = this.elapsedMs;
       this.speakingText = spoken ? `${spoken} ${next}` : next;
       try {
@@ -570,7 +612,7 @@ export class Conversation {
     const lines = reaskLines(this.lastLanguage, this.male);
     const line = lines[Math.min(this.reasks, lines.length - 1)]!;
     this.reasks = this.reasks >= 2 ? 0 : this.reasks + 1;
-    const turn: Turn = { abort: new AbortController(), realAudio: false, fillerPlayed: true, fillerTimer: null };
+    const turn: Turn = { abort: new AbortController(), realAudio: false, fillerPlayed: true, fillerTimer: null, speakAfterMs: SPEAK_AFTER_SILENCE_MS };
     this.turn = turn;
     this.brain.noteAgentSaid(line);
     await this.say([line], { signal: turn.abort.signal, turn });

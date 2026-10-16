@@ -302,5 +302,38 @@ describe("conversation engine", () => {
       expect(lines.at(-1)!.text).toContain("सुन नहीं पाई"); // feminine voice
       conv.finish("caller_hung_up");
     });
+
+    it("doesn't start talking until the caller has really stopped", async () => {
+      const tr = new FakeTranscriber();
+      const { conv, lines } = make({ transcriber: tr as never });
+      await conv.start();
+      tr.finals.push("मुझे appointment चाहिए");
+      respondScript.push({ sentences: ["जी, बिल्कुल।"] });
+      feed(conv, speech(500));
+      feed(conv, silence(300)); // transcript is ready, but a 0.3 s pause isn't the end of a turn
+      await new Promise((r) => setTimeout(r, 120));
+      expect(lines.some((l) => l.text === "जी, बिल्कुल।")).toBe(false);
+      feed(conv, silence(400)); // now clearly done
+      await until(() => lines.some((l) => l.text === "जी, बिल्कुल।"));
+      conv.finish("caller_hung_up");
+    });
+
+    it("waits patiently while the caller spells an email", async () => {
+      const tr = new FakeTranscriber();
+      const { conv, lines } = make({ transcriber: tr as never });
+      await conv.start();
+      tr.finals.push("ठीक है", "fakhruddin at snyder staffing dot com");
+      respondScript.push({ sentences: ["अच्छा, आपका email क्या है?"] }, { sentences: ["धन्यवाद, नोट कर लिया।"] });
+      feed(conv, speech(400));
+      feed(conv, silence(700));
+      await until(() => lines.some((l) => l.text === "अच्छा, आपका email क्या है?"));
+      feed(conv, speech(600)); // "fakhruddin…"
+      feed(conv, silence(700)); // a pause mid-spelling: no reply yet
+      await new Promise((r) => setTimeout(r, 120));
+      expect(lines.some((l) => l.text === "धन्यवाद, नोट कर लिया।")).toBe(false);
+      feed(conv, silence(900)); // finished
+      await until(() => lines.some((l) => l.text === "धन्यवाद, नोट कर लिया।"));
+      conv.finish("caller_hung_up");
+    });
   });
 });

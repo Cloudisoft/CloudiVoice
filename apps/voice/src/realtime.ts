@@ -49,7 +49,11 @@ export class StreamingTranscriber implements Transcriber {
   private failures = 0;
   onPartial: ((text: string) => void) | null = null;
 
-  constructor(private readonly sampleRate: 8000 | 16000) {
+  constructor(
+    private readonly sampleRate: 8000 | 16000,
+    /** Names and words likely on this call (company, person, products) — biases recognition. */
+    private readonly keyterms: string[] = [],
+  ) {
     this.connect();
     this.ping = setInterval(() => this.send({ event: "ping" }), 20_000);
   }
@@ -66,7 +70,9 @@ export class StreamingTranscriber implements Transcriber {
       endpointing: "manual",
       encoding: "linear16",
       sample_rate: String(this.sampleRate),
-      mode: "transcribe",
+      model: env.sttModel,
+      mode: env.sttMode,
+      ...(this.keyterms.length && env.sttModel.startsWith("saaras:v4") ? { keyterms: JSON.stringify(this.keyterms.slice(0, 50)) } : {}),
     });
     const ws = new WebSocket(`${WS_BASE()}/speech-to-text-realtime/ws?${qs}`, { headers: { "api-subscription-key": env.speechApiKey } });
     this.ws = ws;
@@ -157,9 +163,9 @@ export class StreamingTranscriber implements Transcriber {
 }
 
 /** REST transcription of a finished segment (fallback path). */
-export async function transcribeSegment(pcm: Int16Array, sampleRate: number): Promise<Transcript> {
+export async function transcribeSegment(pcm: Int16Array, sampleRate: number, keyterms?: string[]): Promise<Transcript> {
   const rate = sampleRate < 16000 ? 16000 : sampleRate;
-  return transcribe(rate === sampleRate ? pcm : resample(pcm, sampleRate, rate), rate);
+  return transcribe(rate === sampleRate ? pcm : resample(pcm, sampleRate, rate), rate, { keyterms });
 }
 
 // ---------------------------------------------------------------------------

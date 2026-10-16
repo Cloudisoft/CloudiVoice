@@ -1,5 +1,5 @@
 import type WebSocket from "ws";
-import { buildSystemPrompt, openingLine } from "@cloudivoice/core/agentPrompt";
+import { buildSystemPrompt, callKeyterms, openingLine } from "@cloudivoice/core/agentPrompt";
 import { bytesToPcm16 } from "@cloudivoice/core/audio";
 import { demoToolResult, getDemoScenario } from "@cloudivoice/core/demoScenarios";
 import { endDemoSession } from "@cloudivoice/core/services/system";
@@ -54,7 +54,8 @@ export function handleDemo(ws: WebSocket, claims: DemoClaims) {
     silenceCheckinSec: 9,
     maxSilenceCheckins: 2,
     sink: new BrowserSink(ws),
-    transcriber: new StreamingTranscriber(16000),
+    keyterms: callKeyterms(config, { direction: "demo", canTransfer: false }),
+    transcriber: new StreamingTranscriber(16000, callKeyterms(config, { direction: "demo", canTransfer: false })),
     synthesizer: new StreamingSynthesizer(16000),
     hooks: {
       onStatus: (status) => send({ type: "status", status }),
@@ -161,7 +162,8 @@ export async function handleAgentTest(ws: WebSocket, claims: AgentTestClaims) {
     silenceCheckinSec: config.silence_checkin_sec,
     maxSilenceCheckins: config.max_silence_checkins,
     sink: live.sink,
-    transcriber: new StreamingTranscriber(16000),
+    keyterms: callKeyterms(config, ctx),
+    transcriber: new StreamingTranscriber(16000, callKeyterms(config, ctx)),
     synthesizer: new StreamingSynthesizer(16000),
     hooks: {
       onPartial: (text) => live.partial(text),

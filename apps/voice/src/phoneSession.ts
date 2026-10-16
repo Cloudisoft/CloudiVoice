@@ -1,6 +1,6 @@
 import type WebSocket from "ws";
 import { parseAgentConfig, fillTemplate } from "@cloudivoice/core/agentConfig";
-import { buildSystemPrompt, openingLine, templateVars, type CallContext } from "@cloudivoice/core/agentPrompt";
+import { buildSystemPrompt, callKeyterms, openingLine, templateVars, type CallContext } from "@cloudivoice/core/agentPrompt";
 import { bytesToPcm16, mulawToPcm16 } from "@cloudivoice/core/audio";
 import { type ToolHost, type ToolName } from "@cloudivoice/core/brain";
 import { withTenant } from "@cloudivoice/core/db/client";
@@ -210,7 +210,8 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
       silenceCheckinSec: data.config.silence_checkin_sec,
       maxSilenceCheckins: data.config.max_silence_checkins,
       sink: live.sink,
-      transcriber: new StreamingTranscriber(inputRate),
+      keyterms: callKeyterms(data.config, ctx),
+      transcriber: new StreamingTranscriber(inputRate, callKeyterms(data.config, ctx)),
       synthesizer: new StreamingSynthesizer(inputRate),
       hooks: {
         onPartial: (text) => live?.partial(text),
@@ -251,11 +252,14 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
             return false;
           }
           // Ending the agent's stream moves the call on to the dialling step.
+          let how = "stream_stopped";
           try {
             await adapter.transfer(providerCallId, setup.callId);
           } catch (e) {
+            how = `stream_stop_failed: ${String(e).slice(0, 200)}`;
             log.warn("stream stop via API failed; closing the stream directly", { callId: setup.callId, err: String(e) });
           }
+          void persist((tx) => addEvent(tx, setup.orgId, setup.callId, "transfer_handoff", { how }));
           setTimeout(() => ws.readyState === ws.OPEN && ws.close(), 1200);
           return true;
         },

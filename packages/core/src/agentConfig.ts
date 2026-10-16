@@ -22,6 +22,8 @@ export const agentConfigSchema = z.object({
   formality: z.enum(["formal", "neutral", "casual"]).default("neutral"),
   opening_line: z.string().trim().max(400).default(""),
   instructions: z.string().trim().max(8000).default(""),
+  /** Names, brands and terms callers will say (comma or newline separated) — helps the agent hear them. */
+  vocabulary: z.string().trim().max(1500).default(""),
   goals: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
   qualification_criteria: z.string().trim().max(2000).default(""),
   transfer_number: z.string().trim().max(20).default(""),

@@ -33,6 +33,7 @@ function readConfig(form: FormData): Partial<AgentConfig> {
     formality: s("formality") as AgentConfig["formality"],
     opening_line: s("opening_line"),
     instructions: s("instructions"),
+    vocabulary: s("vocabulary"),
     goals: s("goals")
       .split("\n")
       .map((g) => g.trim())

@@ -74,7 +74,11 @@ export const env = {
     return (read("SPEECH_API_BASE") ?? "https://api.sarvam.ai").replace(/\/$/, "");
   },
   get sttModel() {
-    return read("STT_MODEL") ?? "saaras:v3";
+    return read("STT_MODEL") ?? "saaras:v4";
+  },
+  /** codemix keeps English words, names and emails in Latin script (best for Hinglish calls). */
+  get sttMode() {
+    return read("STT_MODE") ?? "codemix";
   },
   get ttsModel() {
     return read("TTS_MODEL") ?? "bulbul:v4-flash";

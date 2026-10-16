@@ -188,6 +188,21 @@ export function AgentEditor({ id, name, config, useCases, languages, voices, can
               <span className="field-hint">The agent follows your flow and policies but speaks naturally, adapting to what the caller says instead of reading word-for-word.</span>
               {err("instructions")}
             </div>
+            <div className="field span-2">
+              <label htmlFor="a-vocab">Important words</label>
+              <textarea
+                id="a-vocab"
+                name="vocabulary"
+                className="textarea"
+                style={{ minHeight: 70 }}
+                defaultValue={config.vocabulary}
+                placeholder="Snyder Staffing, CRM, WhatsApp, Baner, Dr. Mehta"
+              />
+              <span className="field-hint">
+                Company, product, place and people names callers will say — comma separated. Helps the agent hear them correctly on phone lines. Your company name, the agent’s name and each lead’s name and city are included automatically.
+              </span>
+              {err("vocabulary")}
+            </div>
             <div className="field">
               <label htmlFor="a-goals">Goals (one per line)</label>
               <textarea id="a-goals" name="goals" className="textarea" defaultValue={config.goals.join("\n")} />
