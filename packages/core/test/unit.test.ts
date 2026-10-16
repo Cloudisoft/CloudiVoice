@@ -259,3 +259,36 @@ describe("call handover", () => {
   });
 });
 
+
+describe("regional languages", () => {
+  it("voices each sentence in the language of its script", async () => {
+    const { speechLanguage } = await import("../src/languages");
+    expect(speechLanguage("હું Priya છું.", "hi-IN", "gu-IN")).toBe("gu-IN");
+    expect(speechLanguage("நான் Priya பேசறேன்.", "en-IN", "ta-IN")).toBe("ta-IN");
+    expect(speechLanguage("मी Priya बोलत आहे.", "hi-IN", "mr-IN")).toBe("mr-IN");
+    expect(speechLanguage("मैं Priya बोल रही हूँ।", "hi-IN", "hi-IN")).toBe("hi-IN");
+    expect(speechLanguage("Okay, sure.", "pa-IN", "pa-IN")).toBe("pa-IN");
+  });
+
+  it("keeps a Marathi agent in Marathi when speech is detected as Hindi", async () => {
+    const { callerLanguage } = await import("../src/languages");
+    expect(callerLanguage("hi-IN", "mr-IN", "mr-IN")).toBe("mr-IN");
+    expect(callerLanguage("en-IN", "kn-IN", "kn-IN")).toBe("en-IN");
+    expect(callerLanguage("xx-YY", "kn-IN", "kn-IN")).toBe("kn-IN");
+  });
+
+  it("opens in the agent's own language with the right gender", () => {
+    const ctx = { direction: "outbound" as const, lead: { first_name: "Ramesh" }, timezone: "Asia/Kolkata" };
+    const pa = (voice: string) => openingLine(parseAgentConfig({ primary_language: "pa-IN", voice, use_case: "sales", company_name: "Acme", persona_name: "Simran" }), ctx);
+    expect(pa("priya")).toMatch(/Ramesh.*ਬੋਲ ਰਹੀ ਹਾਂ/);
+    expect(pa("aditya")).toMatch(/ਬੋਲ ਰਿਹਾ ਹਾਂ/);
+    const ta = openingLine(parseAgentConfig({ primary_language: "ta-IN", use_case: "sales", company_name: "Acme", persona_name: "Priya" }), { ...ctx, lead: null });
+    expect(ta).not.toMatch(/\{\{|Ramesh/);
+    expect(ta).toMatch(/[஀-௿]/);
+  });
+
+  it("tells regional agents to stay in their script", () => {
+    const p = buildSystemPrompt(parseAgentConfig({ primary_language: "gu-IN", company_name: "Acme" }), { direction: "inbound", timezone: "Asia/Kolkata" });
+    expect(p).toContain("ONLY in Gujarati script");
+  });
+});

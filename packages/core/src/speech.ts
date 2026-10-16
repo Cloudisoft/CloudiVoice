@@ -67,6 +67,20 @@ const PERSONAS: Record<string, { hi: string; en: string }> = {
   dev: { hi: "kabir_hi_conversational", en: "dev_en_conversational" },
   amit: { hi: "amit_hi_conversational", en: "deven_en_conversation" },
 };
+/**
+ * Native conversational personas for regional languages, by the voice's
+ * gender. Languages (or genders) without one use the previous model, which
+ * speaks every language with the chosen voice.
+ */
+const REGIONAL_PERSONAS: Record<string, { f?: string; m?: string }> = {
+  "gu-IN": { f: "pooja_gu_conversational", m: "bhavik_gu_conversation" },
+  "mr-IN": { f: "ishita_mr_conversational", m: "nilesh_mr_conversation" },
+  "pa-IN": { m: "anand_pa_conversation" },
+  "bn-IN": { f: "roopa_bn_conversational", m: "arnab_bn_conversation" },
+  "te-IN": { f: "kavitha_te_conversation" },
+  "kn-IN": { f: "chaitra_kn_conversation", m: "chetan_kn_conversation" },
+};
+const MALE = new Set(["aditya", "rahul", "dev", "amit"]);
 const LEGACY_MODEL = "bulbul:v3";
 
 /** Which model + speaker to use for a voice in a language. */
@@ -77,6 +91,8 @@ export function ttsVoice(voice: string, language: string): { model: string; spea
   const p = PERSONAS[voice];
   const tag = language === "hi-IN" ? "hi" : language === "en-IN" ? "en" : null;
   if (p && tag) return { model, speaker: p[tag] };
+  const regional = REGIONAL_PERSONAS[language]?.[MALE.has(voice) ? "m" : "f"];
+  if (regional) return { model, speaker: regional };
   return { model: LEGACY_MODEL, speaker: voice };
 }
 

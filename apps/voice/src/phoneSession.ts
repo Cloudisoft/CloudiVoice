@@ -1,11 +1,12 @@
 import type WebSocket from "ws";
-import { parseAgentConfig, fillTemplate } from "@cloudivoice/core/agentConfig";
+import { parseAgentConfig, fillTemplate, voiceGender } from "@cloudivoice/core/agentConfig";
 import { buildSystemPrompt, callKeyterms, openingLine, templateVars, type CallContext } from "@cloudivoice/core/agentPrompt";
 import { bytesToPcm16, mulawToPcm16 } from "@cloudivoice/core/audio";
 import { type ToolHost, type ToolName } from "@cloudivoice/core/brain";
 import { withTenant } from "@cloudivoice/core/db/client";
 import { env } from "@cloudivoice/core/env";
 import { normalizePhone, phoneForSpeech } from "@cloudivoice/core/phone";
+import { phrases } from "@cloudivoice/core/phrases";
 import { addEvent, addTranscriptLine, transition } from "@cloudivoice/core/services/calls";
 import { scheduleCallback } from "@cloudivoice/core/services/callbacks";
 import { addDnc } from "@cloudivoice/core/services/leads";
@@ -106,15 +107,8 @@ export function handlePhoneStream(ws: WebSocket, setup: CallSetup) {
     if (setup.resume) {
       // Rejoining the same call: no new greeting, no recording restart, and the
       // agent knows what was already said.
-      const hi = data.config.primary_language === "hi-IN";
-      opening =
-        setup.resume === "transfer_failed"
-          ? hi
-            ? "माफ़ कीजिए, अभी हमारी team से कोई उपलब्ध नहीं है। क्या मैं आपके लिए callback schedule कर दूँ?"
-            : "I'm sorry, nobody from the team could pick up right now. Shall I schedule a callback for you?"
-          : hi
-            ? "माफ़ कीजिए, line थोड़ी देर के लिए कट गई थी। जी, बताइए?"
-            : "Sorry about that, the line dropped for a moment. Please go on.";
+      const lines = phrases(data.config.primary_language, voiceGender(data.config.voice));
+      opening = setup.resume === "transfer_failed" ? lines.transferFailed : lines.reconnected;
       if (data.call.answered_at) atOffsetMs = Date.now() - new Date(data.call.answered_at).getTime();
       if (setup.resume === "transfer_failed") void persist((tx) => tx`update calls set transfer_status = 'failed', transfer_to = null where id = ${setup.callId} and transfer_status <> 'transferred'`);
       const lines = await withTenant(setup.orgId, (tx) => tx<{ speaker: string; text: string }[]>`

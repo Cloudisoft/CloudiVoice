@@ -1,5 +1,7 @@
+import { fillTemplate, voiceGender } from "@cloudivoice/core/agentConfig";
 import { pcm16ToWav } from "@cloudivoice/core/audio";
 import { getLanguage, VOICES } from "@cloudivoice/core/languages";
+import { phrases } from "@cloudivoice/core/phrases";
 import { synthesize } from "@cloudivoice/core/speech";
 import { rateLimit } from "@cloudivoice/core/services/system";
 import { currentUser } from "@/lib/session";
@@ -24,7 +26,9 @@ export async function GET(req: Request) {
   if (!wav) {
     if (!(await rateLimit(`preview:${user.userId}`, 30, 3600)).ok) return new Response("Too many previews", { status: 429 });
     try {
-      const { pcm, sampleRate } = await synthesize(LINES[lang] ?? LINES["en-IN"]!, { language: lang, voice, pace, sampleRate: 22050 });
+      const label = VOICES.find((v) => v.id === voice)!.label;
+      const line = LINES[lang] ?? fillTemplate(phrases(lang, voiceGender(voice)).receptionist, { agent_name: label, company: "Cloudisoft" });
+      const { pcm, sampleRate } = await synthesize(line, { language: lang, voice, pace, sampleRate: 22050 });
       wav = pcm16ToWav(pcm, sampleRate);
       cache.set(key, wav);
     } catch {

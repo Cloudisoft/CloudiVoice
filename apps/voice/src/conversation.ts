@@ -17,7 +17,10 @@
  *  - Quiet-caller check-ins, maximum duration, supervisor takeover (pause/resume).
  */
 import { AgentBrain, type BrainEvent, type ToolHost } from "@cloudivoice/core/brain";
+import { env } from "@cloudivoice/core/env";
 import { voiceGender } from "@cloudivoice/core/agentConfig";
+import { callerLanguage, speechLanguage } from "@cloudivoice/core/languages";
+import { phrases } from "@cloudivoice/core/phrases";
 import { concatPcm, resample, TurnDetector } from "@cloudivoice/core/audio";
 import { synthesize, synthesizeStream, type Transcript } from "@cloudivoice/core/speech";
 import { transcribeSegment, type Synthesizer, type Transcriber } from "./realtime";
@@ -75,11 +78,11 @@ export interface ConversationOptions {
 
 /** Backchannels and acknowledgements: never a reason to stop talking. */
 const BACKCHANNEL =
-  /^(h+m+|hmm+|haan+|ha+n|ji|ji haan|ok(ay)?|uh+ ?huh|yeah|yes|yep|right|accha|achha|acha|theek( hai)?|ठीक( है)?|हाँ+|हां+|हाँ जी|जी( हाँ)?|अच्छा|ओके|हम्म+|हूँ|उम्म)[.!?।, ]*$/i;
+  /^(h+m+|hmm+|haan+|ha+n|ji|ji haan|ok(ay)?|uh+ ?huh|yeah|yes|yep|right|accha|achha|acha|theek( hai)?|ठीक( है)?|हाँ+|हां+|हाँ जी|जी( हाँ)?|अच्छा|ओके|हम्म+|हूँ|उम्म|हो|होय|बरं|ठीक आहे|હા+|હાં|હમ્મ+|બરાબર|ઓકે|સારું|ਹਾਂ( ?ਜੀ)?|ਜੀ|ਠੀਕ ਹੈ|ਅੱਛਾ|হ্যাঁ|হুঁ|আচ্ছা|ঠিক আছে|ওকে|ஆமா|ஆம்|சரி|ம்+|ஓகே|అవును|సరే|ఓకే|హా|ఊ|ಹೌದು|ಸರಿ|ಓಕೆ|ಹಾ|ಹ್ಮ್+|അതെ|ശരി|ഓക്കെ|ഉം|ହଁ|ଠିକ ଅଛି|ଆଚ୍ଛା)[.!?।, ]*$/i;
 /** A partial transcript ending like this means the caller isn't finished. */
 const TRAILING = /(\b(and|but|so|because|or|that|the|to|like|um+|uh+)|और|लेकिन|पर|तो|क्योंकि|कि|या|मतलब|वो|जो|के|की|का|में)[,]?\s*$/i;
 /** The caller is clearly saying goodbye. */
-const GOODBYE = /(\b(bye|goodbye|bye bye|good night)\b|बाय|अलविदा|टाटा|गुड बाय|रखता हूँ|रखती हूँ|फ़ोन रखत|फोन रखत)/i;
+const GOODBYE = /(\b(bye|goodbye|bye bye|good night)\b|बाय|अलविदा|टाटा|गुड बाय|रखता हूँ|रखती हूँ|फ़ोन रखत|फोन रखत|ठेवतो|ठेवते|આવજો|બાય|ਬਾਏ|ਬਾਈ|বাই|টাটা|பை பை|బై|ಬೈ|ബൈ|ବାଇ)/i;
 const ACK_PREFIX = /^(जी हाँ|जी|हाँ जी|अच्छा|ठीक है|okay|ok|sure|alright|right|got it)[,!।.]\s+/i;
 
 const EARLY_FINALIZE_MS = 220; // pause that triggers an early transcript (reply starts preparing)
@@ -91,37 +94,9 @@ const SPEAK_AFTER_HESITANT_MS = 1000;
 const SPEAK_AFTER_DICTATION_MS = 1400;
 const FILLER_AFTER_MS = 380; // a filler may play if the reply isn't ready once the caller is done
 /** The agent just asked for something people dictate in pieces. */
-const DICTATION = /(e-?mail|ईमेल|मेल|spell|स्पेल|spelling|number|नंबर|नम्बर|mobile|मोबाइल|phone|फ़ोन|फोन|pin ?code|पिन|address|पता|account|आईडी|\bID\b|digits?|अंक|नाम (क्या|बता))/i;
+const DICTATION = /(e-?mail|ईमेल|मेल|spell|स्पेल|spelling|number|नंबर|नम्बर|mobile|मोबाइल|phone|फ़ोन|फोन|pin ?code|पिन|address|पता|account|आईडी|\bID\b|digits?|अंक|नाम (क्या|बता)|નંબર|ઈમેલ|ਨੰਬਰ|ਈਮੇਲ|নম্বর|ইমেল|நம்பர்|ஈமெயில்|నంబర్|ఈమెయిల్|ನಂಬರ್|ಇಮೇಲ್|നമ്പർ|ഇമെയിൽ|ନମ୍ବର|ଇମେଲ)/i;
 const BARGE_VOICED_MS = 650; // sustained speech that interrupts regardless of words
 const REASK_MIN_VOICED_MS = 550; // only re-ask for real speech we couldn't read
-
-const FILLERS: Record<string, string[]> = {
-  "hi-IN": ["जी।", "अच्छा।", "जी, एक सेकंड।", "हाँ जी।"],
-  "en-IN": ["Sure.", "Okay.", "Right, one moment.", "Got it."],
-};
-const CHECKINS: Record<string, string[]> = {
-  "hi-IN": ["क्या आप अभी भी line पर हैं?", "लगता है आवाज़ नहीं आ रही। हम थोड़ी देर बाद फिर कोशिश करेंगे। धन्यवाद!"],
-  "en-IN": ["Are you still there?", "It seems we got disconnected. We'll try again later. Thank you!"],
-};
-const MAX_DURATION_LINE: Record<string, string> = {
-  "hi-IN": "हमारा समय लगभग पूरा हो गया है। आपके समय के लिए बहुत धन्यवाद, आपका दिन शुभ हो!",
-  "en-IN": "We're almost out of time for this call. Thank you so much for your time — have a great day!",
-};
-function reaskLines(lang: string, male: boolean): string[] {
-  if (lang === "hi-IN") {
-    const paa = male ? "पाया" : "पाई";
-    return [
-      `माफ़ कीजिए, मैं ठीक से सुन नहीं ${paa}। क्या आप दोबारा बता सकते हैं?`,
-      "सॉरी, आवाज़ थोड़ी कट गई। एक बार फिर बोलेंगे?",
-      "लगता है line थोड़ी साफ़ नहीं है। क्या आप थोड़ा धीरे और ज़ोर से बोल सकते हैं?",
-    ];
-  }
-  return [
-    "Sorry, I didn't quite catch that. Could you say it again?",
-    "Apologies, the line broke up a little. Could you repeat that?",
-    "The line seems a bit unclear — could you speak a little slower and louder?",
-  ];
-}
 
 // Fillers are synthesized once per voice and reused across calls.
 const fillerCache = new Map<string, Promise<Int16Array[]>>();
@@ -130,7 +105,7 @@ function loadFillers(lang: string, voice: string, pace: number, rate: number) {
   let p = fillerCache.get(key);
   if (!p) {
     p = Promise.all(
-      (FILLERS[lang] ?? FILLERS["en-IN"]!).map(async (text) => {
+      phrases(lang, voiceGender(voice)).fillers.map(async (text) => {
         const r = await synthesize(text, { language: lang, voice, pace, sampleRate: rate });
         return trimSilence(r.sampleRate === rate ? r.pcm : resample(r.pcm, r.sampleRate, rate));
       }),
@@ -236,13 +211,18 @@ export class Conversation {
   private lastPartial = "";
 
   constructor(private readonly o: ConversationOptions) {
-    this.brain = new AgentBrain(o.system, o.tools);
+    this.brain = new AgentBrain(o.system, o.tools, o.language === "hi-IN" || o.language === "en-IN" ? env.llmModel : env.regionalLlmModel);
     this.vad = new TurnDetector({ sampleRate: o.inputSampleRate, endSilenceMs: 550, minSpeechMs: 200 });
     this.lastLanguage = o.language;
     this.male = voiceGender(o.voice) === "male";
     if (o.transcriber) {
       o.transcriber.onPartial = (text) => this.onPartial(text);
     }
+  }
+
+  /** The engine's own lines, in the language the caller is speaking. */
+  private get lines() {
+    return phrases(this.lastLanguage, this.male ? "male" : "female");
   }
 
   /** Per-stage latency, logged when DEBUG_LATENCY=1. */
@@ -382,7 +362,7 @@ export class Conversation {
   private onCallerText(t: Transcript | null, voicedMs: number, atMs: number) {
     if (this.ended) return;
     const text = (t?.text ?? "").trim();
-    if (t?.language === "hi-IN" || t?.language === "en-IN") this.lastLanguage = t.language;
+    if (t?.language) this.lastLanguage = callerLanguage(t.language, this.o.language, this.lastLanguage);
     if (!text) {
       this.bargeAt = null;
       if (!this.paused && voicedMs >= REASK_MIN_VOICED_MS && !this.replySpeaking && !this.turn && !this.segActive) void this.reask();
@@ -476,7 +456,7 @@ export class Conversation {
     } catch (e) {
       if (signal.aborted) return;
       this.o.hooks.onError?.(e);
-      await this.say([this.lastLanguage === "hi-IN" ? "माफ़ कीजिए, एक पल।" : "Sorry, just a moment."], { signal });
+      await this.say([this.lines.oneMoment], { signal });
     }
     if (turn.fillerTimer) clearTimeout(turn.fillerTimer);
     if (signal.aborted || this.turn !== turn) return;
@@ -493,11 +473,7 @@ export class Conversation {
       if (ok) return void this.finish("transferred");
       this.muted = false;
       this.vad.reset();
-      await this.say([
-        this.lastLanguage === "hi-IN"
-          ? "माफ़ कीजिए, अभी कोई उपलब्ध नहीं है। क्या मैं आपके लिए callback schedule कर दूँ?"
-          : "I'm sorry, nobody is available right now. Shall I schedule a callback for you?",
-      ]);
+      await this.say([this.lines.transferFailed]);
     }
     this.afterAgentTurn();
   }
@@ -603,8 +579,8 @@ export class Conversation {
       this.speakingText = spoken ? `${spoken} ${next}` : next;
       try {
         const audio = this.o.synthesizer
-          ? this.o.synthesizer.speak(next, { language: this.lastLanguage, voice: this.o.voice, pace: this.o.pace, signal })
-          : synthesizeStream(next, { language: this.lastLanguage, voice: this.o.voice, pace: this.o.pace, sampleRate: this.o.sink.sampleRate as 8000 | 16000, signal });
+          ? this.o.synthesizer.speak(next, { language: speechLanguage(next, this.lastLanguage, this.o.language), voice: this.o.voice, pace: this.o.pace, signal })
+          : synthesizeStream(next, { language: speechLanguage(next, this.lastLanguage, this.o.language), voice: this.o.voice, pace: this.o.pace, sampleRate: this.o.sink.sampleRate as 8000 | 16000, signal });
         for await (const chunk of audio) {
           if (signal?.aborted || this.ended) break;
           if (firstAudio) {
@@ -648,7 +624,7 @@ export class Conversation {
 
   private async reask() {
     if (this.ended || this.paused) return;
-    const lines = reaskLines(this.lastLanguage, this.male);
+    const lines = this.lines.reask;
     const line = lines[Math.min(this.reasks, lines.length - 1)]!;
     this.reasks = this.reasks >= 2 ? 0 : this.reasks + 1;
     const turn: Turn = { abort: new AbortController(), realAudio: false, fillerPlayed: true, fillerTimer: null, speakAfterMs: SPEAK_AFTER_SILENCE_MS };
@@ -680,14 +656,14 @@ export class Conversation {
 
   private async onSilence() {
     if (this.ended || this.paused || this.replySpeaking || this.turn || this.segActive) return;
-    const lines = CHECKINS[this.lastLanguage] ?? CHECKINS["en-IN"]!;
+    const lines = this.lines;
     this.checkins++;
     if (this.checkins > this.o.maxSilenceCheckins) {
-      await this.say([lines[1]!]);
+      await this.say([lines.disconnected]);
       return void this.finish("silence_timeout");
     }
-    this.brain.noteAgentSaid(lines[0]!);
-    await this.say([lines[0]!]);
+    this.brain.noteAgentSaid(lines.stillThere);
+    await this.say([lines.stillThere]);
     this.afterAgentTurn();
   }
 
@@ -695,7 +671,7 @@ export class Conversation {
     if (this.ended) return;
     this.abortTurn(true);
     this.o.sink.clear();
-    await this.say([MAX_DURATION_LINE[this.lastLanguage] ?? MAX_DURATION_LINE["en-IN"]!]);
+    await this.say([this.lines.maxDuration]);
     this.finish(kind);
   }
 

@@ -94,6 +94,10 @@ export const env = {
   get llmModel() {
     return read("LLM_MODEL") ?? "claude-haiku-4-5";
   },
+  /** Model for agents speaking a regional language (keeps to the language's own script far more reliably). */
+  get regionalLlmModel() {
+    return read("LLM_MODEL_REGIONAL") ?? "claude-haiku-5-5";
+  },
   get llmEffort(): "low" | "medium" | "high" {
     const v = read("LLM_EFFORT");
     return v === "medium" || v === "high" ? v : "low";

@@ -1,3 +1,4 @@
+import { phrases } from "./phrases";
 import { type AgentConfig, defaultOpening, fillOpening, fillTemplate, USE_CASES, voiceGender } from "./agentConfig";
 import { getLanguage } from "./languages";
 
@@ -41,16 +42,77 @@ export function templateVars(cfg: AgentConfig, ctx: CallContext): Record<string,
 }
 
 export function openingLine(cfg: AgentConfig, ctx: CallContext): string {
-  const hindi = cfg.primary_language === "hi-IN";
   const tpl = cfg.opening_line || defaultOpening(cfg.use_case, cfg.primary_language, cfg.voice);
   let line = fillOpening(tpl, templateVars(cfg, ctx), cfg.primary_language);
   if (ctx.returningCaller && ctx.lead?.first_name) {
-    line = hindi
-      ? `नमस्ते ${ctx.lead.first_name} जी, दोबारा call करने के लिए धन्यवाद! ${line.replace(/^नमस्ते[^!।]*[!।]\s*/, "")}`
-      : `Hi ${ctx.lead.first_name}, thanks for calling back! ${line.replace(/^(hello|hi)[^!.]*[!.]\s*/i, "")}`;
+    const lang = cfg.primary_language;
+    line =
+      lang === "hi-IN"
+        ? `नमस्ते ${ctx.lead.first_name} जी, दोबारा call करने के लिए धन्यवाद! ${line.replace(/^नमस्ते[^!।]*[!।]\s*/, "")}`
+        : lang === "en-IN"
+          ? `Hi ${ctx.lead.first_name}, thanks for calling back! ${line.replace(/^(hello|hi)[^!.]*[!.]\s*/i, "")}`
+          : `${ctx.lead.first_name}, ${phrases(lang, voiceGender(cfg.voice)).thanksForCallingBack} ${line}`;
   }
   return line;
 }
+
+/** Script, register and grammar rules for the agent's language. */
+function languageRules(cfg: AgentConfig, name: string, native?: string): string {
+  const male = voiceGender(cfg.voice) === "male";
+  const regional = cfg.primary_language !== "hi-IN" && cfg.primary_language !== "en-IN";
+  const lines = [
+    `- Reply in the language the caller is using. ${cfg.code_switching ? `Natural code-switching is welcome when the caller mixes ${regional ? name : "Hindi"} and English (common words like booking, appointment, slot, ID can stay in English).` : "Do not mix languages within a sentence."}`,
+  ];
+  if (regional) {
+    const gendered = GENDERED_FIRST_PERSON[cfg.primary_language];
+    lines.push(
+      `- Speak ${name} (${native ?? name}) by default — greet, explain and close in ${name}. Write ${name} in its own native script${native ? ` (like "${native}")` : ""}, never in Latin letters or Devanagari; write English words in Latin script exactly as they should be spoken. If the caller switches to Hindi or English, follow them.`,
+      `- Speak everyday spoken ${name}, the way people actually talk on the phone — never formal, literary or news-reader ${name}. Keep common English words (booking, slot, appointment, payment, form, team, okay, sorry, please) as they are, like a real caller would.`,
+      "- Use commas and short sentences to create natural pauses; avoid long sentences with several clauses. Start some replies with a light, natural acknowledgement in the caller's language — but vary it and don't use one every time.",
+      gendered ? `- You speak with a ${male ? "male" : "female"} voice: in ${name} always use ${male ? gendered.m : gendered.f} first-person forms.` : "",
+      `- The example phrases in Hindi and English below show the tone and intent only — say the same kind of thing naturally in the caller's language.`,
+    );
+  } else {
+    lines.push(
+      "- Write Hindi in Devanagari script and English in Latin script, exactly as it should be spoken.",
+      '- Speak everyday spoken Hindi (बोलचाल की भाषा), the way people actually talk on the phone — never textbook or news-reader Hindi. Say "मदद" not "सहायता", "ठीक है" not "उचित है", "बताइए" not "कृपया सूचित करें", "जानकारी" not "सूचना", and keep common English words (booking, slot, appointment, payment, form, team) as they are.',
+      '- Use commas and short sentences to create natural pauses; avoid long sentences with several clauses. A light acknowledgement ("अच्छा,", "जी,", "हाँ,", "Okay,", "Got it,") at the start of a reply sounds human — but vary it and don\'t use one every time.',
+    );
+  }
+  lines.push(
+    `- You speak with a ${male ? "male" : "female"} voice: in Hindi always use ${male ? "masculine first-person forms (मैं बोल रहा हूँ, कर सकता हूँ, बताता हूँ)" : "feminine first-person forms (मैं बोल रही हूँ, कर सकती हूँ, बताती हूँ)"}.`,
+  );
+  return lines.filter(Boolean).join("\n");
+}
+
+/** Closing rule for regional agents: the model drifts to Hindi without it. */
+function scriptReminder(cfg: AgentConfig, name?: string, native?: string): string {
+  const script = SCRIPT_NAME[cfg.primary_language];
+  if (!script || !name) return "";
+  return `\nLanguage: answer in ${name} (${native}) written ONLY in ${script} script, with English words in Latin script. Never use Devanagari, Urdu or any other script${cfg.primary_language === "mr-IN" ? " other than Marathi's own Devanagari, and never Hindi words or grammar (आप, खुद, है) — use Marathi (तुम्ही, स्वतः, आहे)" : ""}, and don't switch to Hindi unless the caller speaks Hindi. Stay strictly on this call's facts; never invent a day, time or detail.`;
+}
+
+const SCRIPT_NAME: Record<string, string> = {
+  "gu-IN": "Gujarati",
+  "mr-IN": "Devanagari (Marathi)",
+  "pa-IN": "Gurmukhi",
+  "bn-IN": "Bengali",
+  "ta-IN": "Tamil",
+  "te-IN": "Telugu",
+  "kn-IN": "Kannada",
+  "ml-IN": "Malayalam",
+  "od-IN": "Odia",
+};
+
+/** Respectful suffix after a name, as people say it on the phone. */
+const HONORIFIC: Record<string, string> = { "hi-IN": " जी", "mr-IN": " जी", "pa-IN": " ਜੀ" };
+
+/** Languages whose first-person verbs agree with the speaker's gender. */
+const GENDERED_FIRST_PERSON: Record<string, { f: string; m: string }> = {
+  "mr-IN": { f: "feminine (मी बोलत आहे, करू शकते, सांगते)", m: "masculine (मी बोलत आहे, करू शकतो, सांगतो)" },
+  "gu-IN": { f: "feminine (હું બોલી રહી છું, કરી શકું છું, ગઈ હતી)", m: "masculine (હું બોલી રહ્યો છું, કરી શકું છું, ગયો હતો)" },
+  "pa-IN": { f: "feminine (ਮੈਂ ਬੋਲ ਰਹੀ ਹਾਂ, ਕਰ ਸਕਦੀ ਹਾਂ, ਦੱਸਦੀ ਹਾਂ)", m: "masculine (ਮੈਂ ਬੋਲ ਰਿਹਾ ਹਾਂ, ਕਰ ਸਕਦਾ ਹਾਂ, ਦੱਸਦਾ ਹਾਂ)" },
+};
 
 /** "SnyderStaffing" → "Snyder Staffing" (how people say it). */
 function spoken(name: string) {
@@ -148,11 +210,7 @@ Current date and time for the caller: ${formatNow(ctx)}. Use it silently to turn
 
 # Language
 - Primary language: ${primary?.name ?? cfg.primary_language}. Fallback: ${fallback?.name ?? cfg.fallback_language}.
-- Reply in the language the caller is using. ${cfg.code_switching ? "Natural Hinglish code-switching is welcome when the caller mixes Hindi and English (common words like booking, appointment, slot, ID can stay in English)." : "Do not mix languages within a sentence."}
-- Write Hindi in Devanagari script and English in Latin script, exactly as it should be spoken.
-- Speak everyday spoken Hindi (बोलचाल की भाषा), the way people actually talk on the phone — never textbook or news-reader Hindi. Say "मदद" not "सहायता", "ठीक है" not "उचित है", "बताइए" not "कृपया सूचित करें", "जानकारी" not "सूचना", and keep common English words (booking, slot, appointment, payment, form, team) as they are.
-- Use commas and short sentences to create natural pauses; avoid long sentences with several clauses. A light acknowledgement ("अच्छा,", "जी,", "हाँ,", "Okay,", "Got it,") at the start of a reply sounds human — but vary it and don't use one every time.
-- You speak with a ${voiceGender(cfg.voice)} voice: in Hindi always use ${voiceGender(cfg.voice) === "male" ? "masculine first-person forms (मैं बोल रहा हूँ, कर सकता हूँ, बताता हूँ)" : "feminine first-person forms (मैं बोल रही हूँ, कर सकती हूँ, बताती हूँ)"}.
+${languageRules(cfg, primary?.name ?? cfg.primary_language, primary?.native)}
 
 # Sound like a real person on the phone
 - Talk the way a friendly, experienced ${cfg.company_name} team member talks: short natural sentences, everyday words, contractions, a brief acknowledgement before you answer ("जी, बिल्कुल", "Got it", "Sure"). Vary your phrasing; never repeat the same sentence twice in a call.
@@ -205,7 +263,7 @@ Current date and time for the caller: ${formatNow(ctx)}. Use it silently to turn
 - Never ask for card numbers, CVV, OTPs, passwords or Aadhaar numbers.
 ${ctx.isDemo ? "- This is a public demo with synthetic data only. Bookings and details are not real; you may say so if asked.\n" : ""}
 # The person
-${personName ? `- Their name is ${vars.full_name || personName}. Address them as "${personName}${cfg.primary_language === "hi-IN" ? " जी" : ""}" occasionally — not in every sentence.` : ctx.direction === "outbound" ? "- You don't have their name on file. Don't guess or invent one; if it helps, politely ask who you're speaking with." : "- You may not know the caller's name yet; ask politely when it's useful."}
+${personName ? `- Their name is ${vars.full_name || personName}. Address them as "${personName}${HONORIFIC[cfg.primary_language] ?? ""}" occasionally — not in every sentence.` : ctx.direction === "outbound" ? "- You don't have their name on file. Don't guess or invent one; if it helps, politely ask who you're speaking with." : "- You may not know the caller's name yet; ask politely when it's useful."}
 
 # Goals
 ${cfg.goals.length ? cfg.goals.map((g, i) => `${i + 1}. ${fill(g)}`).join("\n") : "Help the caller efficiently and leave them with a clear next step."}
@@ -213,6 +271,6 @@ ${cfg.qualification_criteria ? `\n# Qualification criteria\n${cfg.qualification_
 ${knownDetails.length ? `\n# Details already on file\n${knownDetails.join("\n")}\n` : ""}
 ${cfg.instructions ? `\n# Script and SOP from ${cfg.company_name} (follow closely)\nFollow this flow, policies and wording in spirit, adapting naturally to what the caller says. Don't read it word-for-word, don't skip required steps or disclosures, and if the caller goes off-script, help them and then return to the flow.\n${fill(cfg.instructions)}\n` : ""}
 # Final reminder (applies to every reply)
-Two short sentences, under thirty-five words, at most one question. Warm, patient, human — reflect what they said, then help. If you need to explain more, say the most important part now and offer to tell more.
+Two short sentences, under thirty-five words, at most one question. Warm, patient, human — reflect what they said, then help. If you need to explain more, say the most important part now and offer to tell more.${scriptReminder(cfg, primary?.name, primary?.native)}
 `.replace(/\n{3,}/g, "\n\n");
 }
