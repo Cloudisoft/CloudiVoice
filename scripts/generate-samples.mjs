@@ -4,7 +4,10 @@
  * personas. Keeps each sample's script, rebuilds audio, timings and waveform
  * peaks in apps/web/public/samples/manifest.json.
  *
- *   SPEECH_API_KEY=... node scripts/generate-samples.mjs
+ *   SPEECH_API_KEY=... node scripts/generate-samples.mjs [--only=id,id]
+ *
+ * Also writes one <id>.json per sample so the homepage can load a single
+ * sample's transcript and waveform instead of the whole manifest.
  */
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -26,15 +29,39 @@ const PERSONA = {
   "en-IN": {
     Ananya: "ishita_en_customer", Rohan: "dev_en_conversational", Simran: "simran_en_conversation",
     Priya: "roopa_en_conversational", Arjun: "deven_en_conversation", Vikram: "deven_en_conversation",
+    Kavya: "neha_en_customer", Amit: "dev_en_conversational", Dev: "deven_en_conversation", Sunita: "ishita_en_customer",
   },
 };
+PERSONA["hi-IN"].Vikram = "manan_hi_conversational";
 
-async function tts(text, language, speaker) {
+const FEMALE = new Set(["Ananya", "Kavya", "Simran", "Priya", "Neha", "Sunita"]);
+// Native conversational voices for regional languages; others use the all-language model.
+const REGIONAL = {
+  "gu-IN": { f: "pooja_gu_conversational", m: "bhavik_gu_conversation" },
+  "mr-IN": { f: "ishita_mr_conversational", m: "nilesh_mr_conversation" },
+  "pa-IN": { m: "anand_pa_conversation" },
+  "bn-IN": { f: "roopa_bn_conversational", m: "arnab_bn_conversation" },
+  "te-IN": { f: "kavitha_te_conversation" },
+  "kn-IN": { f: "chaitra_kn_conversation", m: "chetan_kn_conversation" },
+};
+
+function voiceFor(lang, name) {
+  const persona = PERSONA[lang]?.[name];
+  if (persona) return { model: "bulbul:v4-flash", speaker: persona };
+  const g = FEMALE.has(name) ? "f" : "m";
+  const regional = REGIONAL[lang]?.[g];
+  if (regional) return { model: "bulbul:v4-flash", speaker: regional };
+  return { model: "bulbul:v3", speaker: g === "f" ? "priya" : "aditya" };
+}
+
+const only = process.argv.find((a) => a.startsWith("--only="))?.slice(7).split(",");
+
+async function tts(text, language, { model, speaker }) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch("https://api.sarvam.ai/text-to-speech", {
       method: "POST",
       headers: { "api-subscription-key": KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ text, target_language_code: language, model: "bulbul:v4-flash", speaker, pace: 1.0, speech_sample_rate: RATE }),
+      body: JSON.stringify({ text, target_language_code: language, model, speaker, pace: 1.0, speech_sample_rate: RATE }),
     });
     if (res.ok) {
       const wav = Buffer.from((await res.json()).audios[0], "base64");
@@ -64,13 +91,13 @@ function trim(pcm) {
 const ms = (n) => Math.round((n / RATE) * 1000);
 
 for (const s of manifest.samples) {
+  if (only && !only.includes(s.id)) continue;
   console.log(`▸ ${s.id}`);
   const lang = s.language;
   const parts = [];
   for (const seg of s.segments) {
     const name = seg.speaker === "agent" ? s.agentName : s.callerName;
-    const speaker = PERSONA[lang]?.[name];
-    if (!speaker) throw new Error(`No persona for ${name} (${lang})`);
+    const speaker = voiceFor(lang, name);
     parts.push({ seg, pcm: trim(await tts(seg.text, lang, speaker)) });
   }
   // Natural turn-taking: short gaps, a little longer after questions.
@@ -114,12 +141,13 @@ for (const s of manifest.samples) {
   const tmp = mkdtempSync(join(tmpdir(), "cv-sample-"));
   const raw16 = join(tmp, "a.pcm");
   writeFileSync(raw16, Buffer.from(mix.buffer));
-  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "s16le", "-ar", String(RATE), "-ac", "1", "-i", raw16, "-af", "loudnorm=I=-18:TP=-1.5:LRA=11", "-ar", String(RATE), "-codec:a", "libmp3lame", "-b:a", "64k", join(DIR, `${s.id}.mp3`)]);
+  execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "s16le", "-ar", String(RATE), "-ac", "1", "-i", raw16, "-af", "loudnorm=I=-18:TP=-1.5:LRA=11", "-ar", String(RATE), "-codec:a", "libmp3lame", "-b:a", process.env.SAMPLE_BITRATE ?? "48k", join(DIR, `${s.id}.mp3`)]);
 
   s.segments = placed.map((p) => ({ ...p.seg, startMs: ms(p.start), endMs: ms(p.end) }));
   s.events = events;
   s.durationMs = ms(total);
   s.peaks = peaks;
+  writeFileSync(join(DIR, `${s.id}.json`), JSON.stringify(s));
   console.log(`  ${(s.durationMs / 1000).toFixed(1)}s, ${s.segments.length} turns`);
 }
 writeFileSync(join(DIR, "manifest.json"), JSON.stringify(manifest));

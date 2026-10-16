@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const CAPABILITIES: { title: string; body: string; status: "live" | "validation" | "roadmap"; tag: string }[] = [
   { tag: "IN / OUT", title: "Inbound & outbound calling", body: "Answer every call on your number and run outbound campaigns with pacing, calling hours and concurrency limits.", status: "live" },
-  { tag: "HI · EN", title: "Multilingual conversations", body: "Hindi, Indian English and natural Hinglish code-switching today. Gujarati, Marathi, Bengali, Tamil, Telugu, Kannada and Malayalam are in validation.", status: "live" },
+  { tag: "11 LANGUAGES", title: "Multilingual conversations", body: "Hindi, Indian English, Gujarati, Marathi, Punjabi, Bengali, Tamil, Telugu, Kannada, Malayalam and Odia, with natural code-switching the way people really talk.", status: "live" },
   { tag: "QUALIFY", title: "Lead qualification", body: "Ask your questions in your order, score against your criteria and hand hot leads to your team.", status: "live" },
   { tag: "BOOK", title: "Appointments", body: "Offer slots, confirm details read back on file, and book — with dates and times understood in IST.", status: "live" },
   { tag: "SUPPORT", title: "Customer support", body: "Answer from your knowledge base — PDFs, Word files, FAQs — instead of guessing.", status: "live" },
@@ -108,7 +108,7 @@ export default async function HomePage() {
             <div>
               <dt className="label">Languages</dt>
               <dd>
-                Hindi · English<span className="fact-sub">+7 Indian languages in validation</span>
+                Hindi · English<span className="fact-sub">+ {languages.length - 2} regional Indian languages</span>
               </dd>
             </div>
             <div>

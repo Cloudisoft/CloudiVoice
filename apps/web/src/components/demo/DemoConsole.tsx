@@ -74,15 +74,19 @@ export function DemoConsole({ initial, samples, scenarios, languages, liveEnable
   const langsForScenario = useMemo(() => new Set(samples.filter((s) => s.scenario === scenario).map((s) => s.language)), [samples, scenario]);
   const scenarioInfo = scenarios.find((s) => s.id === scenario) ?? scenarios[0]!;
 
-  // Fetch the full manifest lazily (peaks + transcripts for other samples).
-  const ensureAll = useCallback(async () => {
-    if (all.size === samples.length) return all;
-    const res = await fetch("/samples/manifest.json");
-    const data = (await res.json()) as { samples: Sample[] };
-    const map = new Map(data.samples.map((s) => [s.id, s]));
-    setAll(map);
-    return map;
-  }, [all, samples.length]);
+  // Load one sample's transcript and waveform when it's picked.
+  const loadSample = useCallback(
+    async (id: string) => {
+      const have = all.get(id);
+      if (have) return have;
+      const res = await fetch(`/samples/${encodeURIComponent(id)}.json`);
+      if (!res.ok) throw new Error("sample unavailable");
+      const s = (await res.json()) as Sample;
+      setAll((m) => new Map(m).set(id, s));
+      return s;
+    },
+    [all],
+  );
 
   const select = useCallback(
     async (nextScenario: string, nextLanguage: string) => {
@@ -95,8 +99,7 @@ export function DemoConsole({ initial, samples, scenarios, languages, liveEnable
       audio.current?.pause();
       setStatus("loading");
       try {
-        const map = await ensureAll();
-        const next = map.get(meta.id);
+        const next = await loadSample(meta.id);
         if (next) {
           setSample(next);
           setNow(0);
@@ -106,7 +109,7 @@ export function DemoConsole({ initial, samples, scenarios, languages, liveEnable
         setStatus("error");
       }
     },
-    [ensureAll, sample.id, samples],
+    [loadSample, sample.id, samples],
   );
 
   const tick = useCallback(() => {
@@ -342,7 +345,7 @@ export function DemoConsole({ initial, samples, scenarios, languages, liveEnable
       <div className="console-transcript" aria-live="polite">
         {mode === "sample" ? (
           current ? (
-            <p className={`line line-${current.speaker}`} lang={sample.language === "hi-IN" ? "hi" : "en"}>
+            <p className={`line line-${current.speaker}`} lang={sample.language.slice(0, 2)}>
               <span className="line-who mono">
                 {current.speaker} <span aria-hidden="true">›</span>
               </span>
@@ -441,7 +444,7 @@ export function DemoConsole({ initial, samples, scenarios, languages, liveEnable
         </div>
       )}
       {mode === "sample" && showTranscript && (
-        <ol className="transcript-list" lang={sample.language === "hi-IN" ? "hi" : "en"}>
+        <ol className="transcript-list" lang={sample.language.slice(0, 2)}>
           {sample.segments.map((s, i) => (
             <li key={i} className={i === activeIndex ? "is-active" : ""}>
               <button onClick={() => { seek(s.startMs); void play(); }}>
