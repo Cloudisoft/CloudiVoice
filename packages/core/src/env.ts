@@ -83,9 +83,9 @@ export const env = {
   get ttsModel() {
     return read("TTS_MODEL") ?? "bulbul:v4-flash";
   },
-  /** Optional voice expressiveness (0.01–1). Unset = the engine's tuned default. */
+  /** Voice expressiveness (0.01–1); higher sounds more emotional. */
   get ttsTemperature(): number | undefined {
-    const v = Number(read("TTS_TEMPERATURE"));
+    const v = Number(read("TTS_TEMPERATURE") ?? "0.7"); // a little more expressive than the engine default (0.6)
     return Number.isFinite(v) && v > 0 && v <= 1 ? v : undefined;
   },
   get anthropicApiKey() {

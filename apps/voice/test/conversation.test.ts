@@ -337,3 +337,19 @@ describe("conversation engine", () => {
     });
   });
 });
+
+describe("pause capping", () => {
+  it("keeps natural pauses but drops long dead air", async () => {
+    const { PauseCapper } = await import("../src/conversation");
+    const rate = 8000;
+    const voice = (ms: number) => Int16Array.from({ length: (rate * ms) / 1000 }, (_, i) => Math.round(Math.sin(i / 3) * 8000));
+    const quiet = (ms: number) => new Int16Array((rate * ms) / 1000);
+    const c = new PauseCapper(rate);
+    const ms = (a: Int16Array) => (a.length / rate) * 1000;
+    expect(ms(c.cap(voice(500)))).toBe(500);
+    expect(ms(c.cap(quiet(300)))).toBe(300); // natural pause kept
+    expect(ms(c.cap(quiet(10_000)))).toBeLessThanOrEqual(310); // capped at ~0.6 s total
+    expect(ms(c.cap(voice(200)))).toBe(200); // speech resumes untouched
+  });
+});
+

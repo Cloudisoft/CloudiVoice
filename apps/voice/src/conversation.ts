@@ -157,6 +157,43 @@ function trimSilence(pcm: Int16Array): Int16Array {
   return out;
 }
 
+/**
+ * The voice engine occasionally appends long dead air (seconds) to a
+ * sentence. Natural pauses are kept; anything beyond MAX_PAUSE_MS is dropped.
+ */
+const MAX_PAUSE_MS = 600;
+export class PauseCapper {
+  private quietMs = 0;
+  constructor(private readonly rate: number) {}
+  cap(pcm: Int16Array): Int16Array {
+    const win = Math.max(1, Math.round(this.rate / 100)); // 10 ms
+    const winMs = (win / this.rate) * 1000;
+    const keep: Int16Array[] = [];
+    let kept = 0;
+    for (let i = 0; i < pcm.length; i += win) {
+      const seg = pcm.subarray(i, Math.min(pcm.length, i + win));
+      let e = 0;
+      for (let j = 0; j < seg.length; j++) e += Math.abs(seg[j]!);
+      if (e / seg.length < 250) {
+        this.quietMs += winMs;
+        if (this.quietMs > MAX_PAUSE_MS) continue;
+      } else {
+        this.quietMs = 0;
+      }
+      keep.push(seg);
+      kept += seg.length;
+    }
+    if (kept === pcm.length) return pcm;
+    const out = new Int16Array(kept);
+    let o = 0;
+    for (const k of keep) {
+      out.set(k, o);
+      o += k.length;
+    }
+    return out;
+  }
+}
+
 interface Turn {
   abort: AbortController;
   realAudio: boolean;
@@ -551,6 +588,7 @@ export class Conversation {
     })();
 
     let spoken = "";
+    const pauses = new PauseCapper(this.o.sink.sampleRate);
     let firstAudio = true;
     for (;;) {
       if (signal?.aborted || this.ended) break;
@@ -579,7 +617,8 @@ export class Conversation {
             this.replySpeaking = true;
             this.setStatus("speaking");
           }
-          this.play(chunk);
+          const audible = pauses.cap(chunk);
+          if (audible.length) this.play(audible);
         }
       } catch (e) {
         if (!signal?.aborted) this.o.hooks.onError?.(e);
